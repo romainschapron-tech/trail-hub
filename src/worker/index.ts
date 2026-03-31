@@ -1,0 +1,76 @@
+import { Hono } from 'hono'
+import { cors } from 'hono/cors'
+import { racesRoutes } from './routes/races'
+import { trackingRoutes } from './routes/tracking'
+import { settingsRoutes } from './routes/settings'
+
+export type AppEnv = {
+  Bindings: {
+    DB: D1Database
+    ASSETS: Fetcher
+    RESEND_API_KEY: string
+    NOTIFICATION_EMAIL: string
+  }
+}
+
+const app = new Hono<AppEnv>()
+
+app.use('/api/*', cors())
+
+app.route('/api/races', racesRoutes)
+app.route('/api/tracking', trackingRoutes)
+app.route('/api/settings', settingsRoutes)
+
+app.get('/api/dashboard/stats', async (c) => {
+  const db = c.env.DB
+  const now = new Date().toISOString().slice(0, 10)
+
+  const [totalRaces, trackedRaces, upcomingRegistered, upcomingDeadlines] =
+    await Promise.all([
+      db.prepare('SELECT COUNT(*) as count FROM races').first<{ count: number }>(),
+      db.prepare('SELECT COUNT(*) as count FROM tracking').first<{ count: number }>(),
+      db
+        .prepare(
+          `SELECT COUNT(*) as count FROM tracking t
+         JOIN races r ON r.id = t.race_id
+         WHERE t.status = 'registered' AND r.race_date >= ?`
+        )
+        .bind(now)
+        .first<{ count: number }>(),
+      db
+        .prepare(
+          `SELECT COUNT(*) as count FROM tracking t
+         JOIN races r ON r.id = t.race_id
+         WHERE t.status IN ('interested', 'registered')
+         AND r.registration_deadline IS NOT NULL
+         AND r.registration_deadline >= ?
+         AND r.registration_deadline <= date(?, '+30 days')`
+        )
+        .bind(now, now)
+        .first<{ count: number }>(),
+    ])
+
+  return c.json({
+    totalRaces: totalRaces?.count ?? 0,
+    trackedRaces: trackedRaces?.count ?? 0,
+    upcomingRegistered: upcomingRegistered?.count ?? 0,
+    upcomingDeadlines: upcomingDeadlines?.count ?? 0,
+  })
+})
+
+export default {
+  fetch: app.fetch,
+  async scheduled(event: ScheduledEvent, env: AppEnv['Bindings'], ctx: ExecutionContext) {
+    const hour = new Date(event.scheduledTime).getUTCHours()
+
+    if (hour === 4) {
+      // Scraping cron - Phase 4
+      console.log('Scraping cron triggered')
+    }
+
+    if (hour === 7) {
+      // Reminder cron - Phase 5
+      console.log('Reminder cron triggered')
+    }
+  },
+}

@@ -1,0 +1,34 @@
+{
+  "name": "trail-hub",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"bun run dev:worker\" \"bun run dev:frontend\"",
+    "dev:frontend": "vite",
+    "dev:worker": "wrangler dev",
+    "build": "vite build",
+    "preview": "vite build && vite preview",
+    "deploy": "vite build && wrangler deploy",
+    "db:migrate:local": "wrangler d1 execute trail-hub-db --local --file",
+    "db:migrate:remote": "wrangler d1 execute trail-hub-db --remote --file"
+  },
+  "dependencies": {
+    "hono": "^4.7.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "@tanstack/react-router": "^1.120.0",
+    "leaflet": "^1.9.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250320.0",
+    "@tanstack/router-plugin": "^1.120.0",
+    "@types/leaflet": "^1.9.17",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.4.0",
+    "concurrently": "^9.1.0",
+    "typescript": "^5.8.0",
+    "vite": "^6.3.0",
+    "wrangler": "^4.14.0"
+  }
+}
