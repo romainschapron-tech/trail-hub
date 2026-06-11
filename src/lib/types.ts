@@ -46,6 +46,8 @@ export interface RaceWithTracking extends Race {
   tracking_status: TrackingStatus | null
   tracking_notes: string | null
   tracking_readiness: string | null
+  finish_time: string | null
+  finish_position: number | null
 }
 
 export type RaceFormat = 'trail' | 'ultra' | 'vertical' | 'sky' | 'marathon' | 'other'
@@ -75,6 +77,9 @@ export interface DashboardStats {
   trackedRaces: number
   upcomingRegistered: number
   upcomingDeadlines: number
+  completedFinishes: number
+  completedKm: number
+  completedElevation: number
 }
 
 export interface ReminderRule {

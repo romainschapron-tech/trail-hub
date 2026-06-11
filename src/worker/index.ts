@@ -25,7 +25,7 @@ app.get('/api/dashboard/stats', async (c) => {
   const db = c.env.DB
   const now = new Date().toISOString().slice(0, 10)
 
-  const [totalRaces, trackedRaces, upcomingRegistered, upcomingDeadlines] =
+  const [totalRaces, trackedRaces, upcomingRegistered, upcomingDeadlines, completedStats] =
     await Promise.all([
       db.prepare('SELECT COUNT(*) as count FROM races').first<{ count: number }>(),
       db.prepare('SELECT COUNT(*) as count FROM tracking').first<{ count: number }>(),
@@ -48,6 +48,16 @@ app.get('/api/dashboard/stats', async (c) => {
         )
         .bind(now, now)
         .first<{ count: number }>(),
+      db
+        .prepare(
+          `SELECT COUNT(*) as finishes,
+                  COALESCE(SUM(r.distance_km), 0) as totalKm,
+                  COALESCE(SUM(r.elevation_gain), 0) as totalElevation
+           FROM tracking t
+           JOIN races r ON r.id = t.race_id
+           WHERE t.status = 'completed'`
+        )
+        .first<{ finishes: number; totalKm: number; totalElevation: number }>(),
     ])
 
   return c.json({
@@ -55,6 +65,9 @@ app.get('/api/dashboard/stats', async (c) => {
     trackedRaces: trackedRaces?.count ?? 0,
     upcomingRegistered: upcomingRegistered?.count ?? 0,
     upcomingDeadlines: upcomingDeadlines?.count ?? 0,
+    completedFinishes: completedStats?.finishes ?? 0,
+    completedKm: Math.round(completedStats?.totalKm ?? 0),
+    completedElevation: Math.round(completedStats?.totalElevation ?? 0),
   })
 })
 

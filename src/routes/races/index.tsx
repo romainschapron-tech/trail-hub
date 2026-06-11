@@ -9,6 +9,37 @@ export const Route = createFileRoute('/races/')({
   component: RaceListPage,
 })
 
+const REG_STATUS_LABELS: Record<string, { label: string; className: string }> = {
+  open: { label: 'Places dispo', className: 'badge badge-open' },
+  full: { label: 'Complet', className: 'badge badge-closed' },
+  closed: { label: 'Ferme', className: 'badge badge-closed' },
+  upcoming: { label: 'Bientot', className: 'badge badge-interested' },
+  unknown: { label: '-', className: '' },
+}
+
+function RegistrationCell({ race }: { race: RaceWithTracking }) {
+  const status = race.registration_status || 'unknown'
+  const info = REG_STATUS_LABELS[status] || REG_STATUS_LABELS.unknown
+  const deadlineDays = daysUntil(race.registration_deadline)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+      {status !== 'unknown' && (
+        <span className={info.className}>{info.label}</span>
+      )}
+      {race.registration_deadline && deadlineDays !== null && deadlineDays >= 0 && (
+        <span style={{
+          fontSize: '0.7rem',
+          color: deadlineDays <= 7 ? 'var(--danger)' :
+                 deadlineDays <= 30 ? 'var(--warning)' : 'var(--text-muted)',
+        }}>
+          Deadline J-{deadlineDays}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function RaceListPage() {
   const [races, setRaces] = useState<RaceWithTracking[]>([])
   const [total, setTotal] = useState(0)
@@ -98,10 +129,22 @@ function RaceListPage() {
         <div className="form-group">
           <select
             className="form-select"
+            value={filters.registrationStatus || ''}
+            onChange={(e) => updateFilter('registrationStatus', e.target.value)}
+          >
+            <option value="">Inscription: tous</option>
+            <option value="open">Places dispo</option>
+            <option value="full">Complet</option>
+            <option value="closed">Ferme</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <select
+            className="form-select"
             value={filters.trackingStatus || ''}
             onChange={(e) => updateFilter('trackingStatus', e.target.value)}
           >
-            <option value="">Tous les statuts</option>
+            <option value="">Suivi: tous</option>
             {TRACKING_STATUSES.map((s) => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
@@ -144,8 +187,8 @@ function RaceListPage() {
                 <th onClick={() => toggleSort('elevation_gain')}>
                   D+ {filters.sort === 'elevation_gain' && (filters.order === 'asc' ? '\u2191' : '\u2193')}
                 </th>
-                <th>Deadline</th>
-                <th>Statut</th>
+                <th>Inscription</th>
+                <th>Suivi</th>
                 <th></th>
               </tr>
             </thead>
@@ -183,17 +226,7 @@ function RaceListPage() {
                       <td>{formatDistance(race.distance_km)}</td>
                       <td>{formatElevation(race.elevation_gain)}</td>
                       <td>
-                        {race.registration_deadline ? (
-                          <span style={{
-                            color: deadlineDays !== null && deadlineDays <= 7 ? 'var(--danger)' :
-                                   deadlineDays !== null && deadlineDays <= 30 ? 'var(--warning)' : undefined,
-                          }}>
-                            {formatDate(race.registration_deadline)}
-                            {deadlineDays !== null && deadlineDays >= 0 && (
-                              <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem' }}>J-{deadlineDays}</span>
-                            )}
-                          </span>
-                        ) : '-'}
+                        <RegistrationCell race={race} />
                       </td>
                       <td>
                         <select

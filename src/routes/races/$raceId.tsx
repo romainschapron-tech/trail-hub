@@ -9,6 +9,29 @@ export const Route = createFileRoute('/races/$raceId')({
   component: RaceDetailPage,
 })
 
+function RegistrationBadge({ status }: { status: string | null }) {
+  const config: Record<string, { label: string; bg: string; color: string }> = {
+    open: { label: 'Places disponibles', bg: 'rgba(34, 197, 94, 0.15)', color: '#4ade80' },
+    full: { label: 'Complet', bg: 'rgba(239, 68, 68, 0.15)', color: '#f87171' },
+    closed: { label: 'Inscriptions fermees', bg: 'rgba(239, 68, 68, 0.15)', color: '#f87171' },
+    upcoming: { label: 'Inscriptions bientot', bg: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa' },
+  }
+  const c = config[status || '']
+  if (!c) return null
+  return (
+    <span style={{
+      padding: '0.35rem 0.9rem',
+      borderRadius: '9999px',
+      fontSize: '0.8125rem',
+      fontWeight: 600,
+      background: c.bg,
+      color: c.color,
+    }}>
+      {c.label}
+    </span>
+  )
+}
+
 function RaceDetailPage() {
   const { raceId } = Route.useParams()
   const [race, setRace] = useState<RaceWithTracking | null>(null)
@@ -50,7 +73,10 @@ function RaceDetailPage() {
       <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }}>
         {/* Main info */}
         <div className="card">
-          <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>{race.name}</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2 style={{ fontSize: '1.5rem' }}>{race.name}</h2>
+            <RegistrationBadge status={race.registration_status} />
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div>
@@ -87,18 +113,30 @@ function RaceDetailPage() {
             </div>
           </div>
 
-          {race.registration_deadline && (
-            <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--bg)', borderRadius: 'var(--radius)' }}>
-              <div className="form-label">Deadline inscription</div>
-              <div style={{
-                fontSize: '1.125rem',
-                fontWeight: 600,
-                color: deadlineDays !== null && deadlineDays <= 7 ? 'var(--danger)' :
-                       deadlineDays !== null && deadlineDays <= 30 ? 'var(--warning)' : undefined,
-              }}>
-                {formatDate(race.registration_deadline)}
-                {deadlineDays !== null && deadlineDays >= 0 && ` (J-${deadlineDays})`}
-              </div>
+          {((race as any).registration_opens || race.registration_deadline) && (
+            <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--bg)', borderRadius: 'var(--radius)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              {(race as any).registration_opens && (
+                <div>
+                  <div className="form-label">Ouverture inscriptions</div>
+                  <div style={{ fontSize: '1rem', fontWeight: 600 }}>
+                    {formatDate((race as any).registration_opens)}
+                  </div>
+                </div>
+              )}
+              {race.registration_deadline && (
+                <div>
+                  <div className="form-label">Deadline inscription</div>
+                  <div style={{
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    color: deadlineDays !== null && deadlineDays <= 7 ? 'var(--danger)' :
+                           deadlineDays !== null && deadlineDays <= 30 ? 'var(--warning)' : undefined,
+                  }}>
+                    {formatDate(race.registration_deadline)}
+                    {deadlineDays !== null && deadlineDays >= 0 && ` (J-${deadlineDays})`}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

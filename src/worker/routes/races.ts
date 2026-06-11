@@ -78,7 +78,7 @@ racesRoutes.get('/', async (c) => {
 
   const countSql = `SELECT COUNT(*) as total FROM races r LEFT JOIN tracking t ON t.race_id = r.id ${where}`
   const dataSql = `
-    SELECT r.*, t.status as tracking_status, t.notes as tracking_notes, t.training_readiness as tracking_readiness
+    SELECT r.*, t.status as tracking_status, t.notes as tracking_notes, t.training_readiness as tracking_readiness, t.finish_time, t.finish_position
     FROM races r
     LEFT JOIN tracking t ON t.race_id = r.id
     ${where}
