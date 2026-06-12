@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import { racesRoutes } from './routes/races'
 import { trackingRoutes } from './routes/tracking'
 import { settingsRoutes } from './routes/settings'
+import { statsRoutes } from './routes/stats'
 
 export type AppEnv = {
   Bindings: {
@@ -20,6 +21,7 @@ app.use('/api/*', cors())
 app.route('/api/races', racesRoutes)
 app.route('/api/tracking', trackingRoutes)
 app.route('/api/settings', settingsRoutes)
+app.route('/api/stats', statsRoutes)
 
 app.get('/api/dashboard/stats', async (c) => {
   const db = c.env.DB

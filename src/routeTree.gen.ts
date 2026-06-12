@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StatsRouteImport } from './routes/stats'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as RacesRouteRouteImport } from './routes/races/route'
@@ -19,6 +20,11 @@ import { Route as RacesMapRouteImport } from './routes/races/map'
 import { Route as RacesCalendarRouteImport } from './routes/races/calendar'
 import { Route as RacesRaceIdRouteImport } from './routes/races/$raceId'
 
+const StatsRoute = StatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -70,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/races': typeof RacesRouteRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/settings': typeof SettingsRoute
+  '/stats': typeof StatsRoute
   '/races/$raceId': typeof RacesRaceIdRoute
   '/races/calendar': typeof RacesCalendarRoute
   '/races/map': typeof RacesMapRoute
@@ -80,6 +87,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/settings': typeof SettingsRoute
+  '/stats': typeof StatsRoute
   '/races/$raceId': typeof RacesRaceIdRoute
   '/races/calendar': typeof RacesCalendarRoute
   '/races/map': typeof RacesMapRoute
@@ -92,6 +100,7 @@ export interface FileRoutesById {
   '/races': typeof RacesRouteRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/settings': typeof SettingsRoute
+  '/stats': typeof StatsRoute
   '/races/$raceId': typeof RacesRaceIdRoute
   '/races/calendar': typeof RacesCalendarRoute
   '/races/map': typeof RacesMapRoute
@@ -105,6 +114,7 @@ export interface FileRouteTypes {
     | '/races'
     | '/dashboard'
     | '/settings'
+    | '/stats'
     | '/races/$raceId'
     | '/races/calendar'
     | '/races/map'
@@ -115,6 +125,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/settings'
+    | '/stats'
     | '/races/$raceId'
     | '/races/calendar'
     | '/races/map'
@@ -126,6 +137,7 @@ export interface FileRouteTypes {
     | '/races'
     | '/dashboard'
     | '/settings'
+    | '/stats'
     | '/races/$raceId'
     | '/races/calendar'
     | '/races/map'
@@ -138,11 +150,19 @@ export interface RootRouteChildren {
   RacesRouteRoute: typeof RacesRouteRouteWithChildren
   DashboardRoute: typeof DashboardRoute
   SettingsRoute: typeof SettingsRoute
+  StatsRoute: typeof StatsRoute
   RacesNewRoute: typeof RacesNewRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/stats': {
+      id: '/stats'
+      path: '/stats'
+      fullPath: '/stats'
+      preLoaderRoute: typeof StatsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -232,6 +252,7 @@ const rootRouteChildren: RootRouteChildren = {
   RacesRouteRoute: RacesRouteRouteWithChildren,
   DashboardRoute: DashboardRoute,
   SettingsRoute: SettingsRoute,
+  StatsRoute: StatsRoute,
   RacesNewRoute: RacesNewRoute,
 }
 export const routeTree = rootRouteImport

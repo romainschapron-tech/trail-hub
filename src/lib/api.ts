@@ -1,4 +1,4 @@
-import type { Race, RaceWithTracking, RaceFilters, DashboardStats } from './types'
+import type { Race, RaceWithTracking, RaceFilters, DashboardStats, YearlyStats } from './types'
 
 const BASE = '/api'
 
@@ -68,6 +68,11 @@ export const api = {
   dashboard: {
     stats() {
       return fetchJson<DashboardStats>(`${BASE}/dashboard/stats`)
+    },
+  },
+  stats: {
+    yearly() {
+      return fetchJson<YearlyStats[]>(`${BASE}/stats/yearly`)
     },
   },
   settings: {

@@ -82,6 +82,15 @@ export interface DashboardStats {
   completedElevation: number
 }
 
+export interface YearlyStats {
+  year: string
+  race_count: number
+  total_km: number
+  total_elevation: number
+  best_position: number | null
+  top10_count: number
+}
+
 export interface ReminderRule {
   id: number
   trigger_type: string
