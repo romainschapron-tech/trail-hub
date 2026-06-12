@@ -44,10 +44,11 @@ function StatsPage() {
   const [targetElev, setTargetElev] = useState('')
 
   useEffect(() => {
-    api.stats.yearly().then(setYearly)
+    api.stats.yearly().then(setYearly).catch(console.error)
     api.races
       .list({ trackingStatus: 'completed', sort: 'race_date', order: 'asc', limit: 200 })
       .then((r) => setPastRaces(r.data))
+      .catch(console.error)
   }, [])
 
   const maxKm = Math.max(...yearly.map((y) => y.total_km), 1)
