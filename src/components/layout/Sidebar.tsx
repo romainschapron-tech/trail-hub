@@ -4,6 +4,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: '\u2302' },
   { to: '/races', label: 'Courses', icon: '\u2691' },
   { to: '/stats', label: 'Stats', icon: '\u25f3' },
+  { to: '/training', label: 'Entra\u00eenement', icon: '\u26a1' },
   { to: '/races/new', label: 'Ajouter', icon: '+' },
   { to: '/settings', label: 'Parametres', icon: '\u2699' },
 ]

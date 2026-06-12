@@ -100,6 +100,49 @@ export interface ReminderRule {
   created_at: string
 }
 
+export interface StravaWeekly {
+  week: string
+  km: number
+  elevation: number
+  count: number
+  sports: string
+}
+
+export interface StravaMonthly {
+  month: string
+  km: number
+  elevation: number
+  count: number
+  run_km: number
+  trail_km: number
+}
+
+export interface StravaSport {
+  sport_type: string
+  count: number
+  km: number
+  elevation: number
+  hours: number
+}
+
+export interface StravaLoad {
+  acuteKm: number
+  acuteElevation: number
+  chronicKm: number
+  chronicElevation: number
+  ratio: number | null
+  streakWeeks: number
+  bestWeek: { week: string; km: number } | null
+  bestMonth: { month: string; km: number } | null
+}
+
+export interface StravaElevation {
+  month: string
+  elevation: number
+  km: number
+  ratio_dplus_per_km: number
+}
+
 export interface ScrapeLog {
   id: number
   source: string

@@ -1,4 +1,4 @@
-import type { Race, RaceWithTracking, RaceFilters, DashboardStats, YearlyStats } from './types'
+import type { Race, RaceWithTracking, RaceFilters, DashboardStats, YearlyStats, StravaWeekly, StravaMonthly, StravaSport, StravaLoad, StravaElevation } from './types'
 
 const BASE = '/api'
 
@@ -73,6 +73,21 @@ export const api = {
   stats: {
     yearly() {
       return fetchJson<YearlyStats[]>(`${BASE}/stats/yearly`)
+    },
+    stravaWeekly(weeks = 52) {
+      return fetchJson<StravaWeekly[]>(`${BASE}/stats/strava/weekly?weeks=${weeks}`)
+    },
+    stravaMonthly() {
+      return fetchJson<StravaMonthly[]>(`${BASE}/stats/strava/monthly`)
+    },
+    stravaSports() {
+      return fetchJson<StravaSport[]>(`${BASE}/stats/strava/sports`)
+    },
+    stravaLoad() {
+      return fetchJson<StravaLoad>(`${BASE}/stats/strava/load`)
+    },
+    stravaElevation() {
+      return fetchJson<StravaElevation[]>(`${BASE}/stats/strava/elevation`)
     },
   },
   settings: {
