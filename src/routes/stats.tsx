@@ -52,7 +52,7 @@ function StatsPage() {
   }, [])
 
   const maxKm = Math.max(...yearly.map((y) => y.total_km), 1)
-  const maxElev = Math.max(...yearly.map((y) => y.total_elevation), 1)
+  const maxElev = Math.max(...yearly.map((y) => y.total_elevation ?? 0), 1)
   const maxRaces = Math.max(...yearly.map((y) => y.race_count), 1)
 
   const prediction = useMemo(() => {
@@ -138,7 +138,7 @@ function StatsPage() {
                     <Bar value={y.total_km} max={maxKm} />
                   </td>
                   <td style={{ padding: '0.6rem 0.75rem' }}>
-                    <Bar value={y.total_elevation} max={maxElev} color="var(--warning, #f59e0b)" />
+                    <Bar value={y.total_elevation ?? 0} max={maxElev} color="var(--warning, #f59e0b)" />
                   </td>
                   <td style={{ padding: '0.6rem 0.75rem', fontWeight: y.best_position != null && y.best_position <= 10 ? 600 : 400, color: y.best_position != null && y.best_position <= 3 ? 'var(--success, #22c55e)' : 'inherit' }}>
                     {y.best_position != null ? `${y.best_position}e` : '—'}
@@ -160,7 +160,7 @@ function StatsPage() {
                     {yearly.reduce((s, y) => s + y.total_km, 0).toLocaleString('fr-FR')} km
                   </td>
                   <td style={{ padding: '0.6rem 0.75rem' }}>
-                    {yearly.reduce((s, y) => s + y.total_elevation, 0).toLocaleString('fr-FR')} m D+
+                    {yearly.reduce((s, y) => s + (y.total_elevation ?? 0), 0).toLocaleString('fr-FR')} m D+
                   </td>
                   <td colSpan={2} />
                 </tr>

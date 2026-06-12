@@ -86,7 +86,7 @@ export interface YearlyStats {
   year: string
   race_count: number
   total_km: number
-  total_elevation: number
+  total_elevation: number | null
   best_position: number | null
   top10_count: number
 }
