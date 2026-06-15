@@ -4,6 +4,8 @@ import { racesRoutes } from './routes/races'
 import { trackingRoutes } from './routes/tracking'
 import { settingsRoutes } from './routes/settings'
 import { statsRoutes } from './routes/stats'
+import { stravaRoutes } from './routes/strava'
+import { syncStravaActivities, isStravaConnected } from './strava'
 
 export type AppEnv = {
   Bindings: {
@@ -11,6 +13,8 @@ export type AppEnv = {
     ASSETS: Fetcher
     RESEND_API_KEY: string
     NOTIFICATION_EMAIL: string
+    STRAVA_CLIENT_ID: string
+    STRAVA_CLIENT_SECRET: string
   }
 }
 
@@ -22,6 +26,7 @@ app.route('/api/races', racesRoutes)
 app.route('/api/tracking', trackingRoutes)
 app.route('/api/settings', settingsRoutes)
 app.route('/api/stats', statsRoutes)
+app.route('/api/strava', stravaRoutes)
 
 app.get('/api/dashboard/stats', async (c) => {
   const db = c.env.DB
@@ -79,8 +84,14 @@ export default {
     const hour = new Date(event.scheduledTime).getUTCHours()
 
     if (hour === 4) {
-      // Scraping cron - Phase 4
-      console.log('Scraping cron triggered')
+      // Daily Strava sync
+      if (await isStravaConnected(env)) {
+        ctx.waitUntil(
+          syncStravaActivities(env)
+            .then((n) => console.log(`Strava sync: ${n} activities`))
+            .catch((e) => console.error('Strava sync failed', e))
+        )
+      }
     }
 
     if (hour === 7) {
