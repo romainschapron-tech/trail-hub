@@ -7,19 +7,23 @@
 }
 
 :root {
-  --bg: #0f172a;
-  --bg-card: #1e293b;
-  --bg-input: #334155;
-  --border: #475569;
+  --bg: #0c121f;
+  --bg-card: #161e2e;
+  --bg-elevated: #1d2738;
+  --bg-input: #1f293b;
+  --border: rgba(148, 163, 184, 0.12);
+  --border-strong: rgba(148, 163, 184, 0.22);
   --text: #f1f5f9;
-  --text-muted: #94a3b8;
+  --text-muted: #8a98ad;
   --primary: #3b82f6;
   --primary-hover: #2563eb;
   --success: #22c55e;
   --warning: #f59e0b;
   --danger: #ef4444;
   --accent: #a855f7;
-  --radius: 8px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25);
   --sidebar-w: 240px;
 }
 
@@ -43,7 +47,7 @@ a {
 
 .sidebar {
   width: var(--sidebar-w);
-  background: var(--bg-card);
+  background: #0a0f1a;
   border-right: 1px solid var(--border);
   padding: 1.5rem 0;
   position: fixed;
@@ -55,10 +59,7 @@ a {
 }
 
 .sidebar-logo {
-  padding: 0 1.5rem 1.5rem;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--primary);
+  padding: 0 1.25rem 1.25rem;
   border-bottom: 1px solid var(--border);
   margin-bottom: 1rem;
 }
@@ -73,22 +74,35 @@ a {
 .nav-link {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.625rem 0.75rem;
+  gap: 0.7rem;
+  padding: 0.6rem 0.75rem;
   border-radius: var(--radius);
   color: var(--text-muted);
-  font-size: 0.875rem;
-  transition: all 0.15s;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+}
+
+.nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  color: inherit;
 }
 
 .nav-link:hover {
-  background: var(--bg-input);
+  background: var(--bg-elevated);
   color: var(--text);
 }
 
 .nav-link.active {
-  background: var(--primary);
-  color: white;
+  background: rgba(59, 130, 246, 0.14);
+  color: #fff;
+}
+
+.nav-link.active .nav-icon {
+  color: var(--primary);
 }
 
 .main-content {
@@ -114,8 +128,9 @@ a {
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   padding: 1.25rem;
+  box-shadow: var(--shadow-card);
 }
 
 .stats-grid {
@@ -128,8 +143,14 @@ a {
 .stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.25rem;
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.35rem;
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.15s;
+}
+
+.stat-card:hover {
+  border-color: var(--border-strong);
 }
 
 .stat-value {

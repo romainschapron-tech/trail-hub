@@ -9,26 +9,26 @@ export const COUNTRIES = [
   { code: 'PT', label: 'Portugal' },
   { code: 'BE', label: 'Belgique' },
   { code: 'NL', label: 'Pays-Bas' },
-  { code: 'GR', label: 'Grece' },
-  { code: 'NO', label: 'Norvege' },
-  { code: 'SE', label: 'Suede' },
+  { code: 'GR', label: 'Grèce' },
+  { code: 'NO', label: 'Norvège' },
+  { code: 'SE', label: 'Suède' },
   { code: 'AD', label: 'Andorre' },
 ] as const
 
 export const RACE_FORMATS = [
   { value: 'trail', label: 'Trail' },
   { value: 'ultra', label: 'Ultra Trail' },
-  { value: 'vertical', label: 'Kilometre Vertical' },
+  { value: 'vertical', label: 'Kilomètre Vertical' },
   { value: 'sky', label: 'Skyrunning' },
   { value: 'marathon', label: 'Trail Marathon' },
   { value: 'other', label: 'Autre' },
 ] as const
 
 export const TRACKING_STATUSES = [
-  { value: 'interested', label: 'Interesse', color: '#3b82f6' },
+  { value: 'interested', label: 'Intéressé', color: '#3b82f6' },
   { value: 'registered', label: 'Inscrit', color: '#22c55e' },
-  { value: 'completed', label: 'Termine', color: '#a855f7' },
-  { value: 'archived', label: 'Archive', color: '#6b7280' },
+  { value: 'completed', label: 'Terminé', color: '#a855f7' },
+  { value: 'archived', label: 'Archivé', color: '#6b7280' },
 ] as const
 
 export const DISTANCE_RANGES = [

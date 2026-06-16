@@ -1,4 +1,4 @@
-import type { Race, RaceWithTracking, RaceFilters, DashboardStats, YearlyStats, StravaWeekly, StravaMonthly, StravaSport, StravaLoad, StravaElevation } from './types'
+import type { Race, RaceWithTracking, RaceFilters, DashboardStats, YearlyStats, StravaWeekly, StravaMonthly, StravaSport, StravaLoad, StravaElevation, StravaOverview, StravaHr, NutritionProduct } from './types'
 
 const BASE = '/api'
 
@@ -88,6 +88,35 @@ export const api = {
     },
     stravaElevation() {
       return fetchJson<StravaElevation[]>(`${BASE}/stats/strava/elevation`)
+    },
+    stravaOverview(year?: number) {
+      return fetchJson<StravaOverview>(`${BASE}/stats/strava/overview${year ? `?year=${year}` : ''}`)
+    },
+    stravaHr() {
+      return fetchJson<StravaHr>(`${BASE}/stats/strava/hr`)
+    },
+    stravaPace() {
+      return fetchJson<{ flatPaceSec: number; sampleCount: number }>(`${BASE}/stats/strava/pace`)
+    },
+  },
+  nutrition: {
+    list() {
+      return fetchJson<NutritionProduct[]>(`${BASE}/nutrition/products`)
+    },
+    importSheet(csvUrl?: string) {
+      return fetchJson<{ ok: boolean; imported?: number; error?: string }>(`${BASE}/nutrition/import`, {
+        method: 'POST',
+        body: JSON.stringify(csvUrl ? { csvUrl } : {}),
+      })
+    },
+    addByUrl(url: string) {
+      return fetchJson<{ ok: boolean; product?: NutritionProduct; error?: string }>(`${BASE}/nutrition/products`, {
+        method: 'POST',
+        body: JSON.stringify({ url }),
+      })
+    },
+    remove(id: number) {
+      return fetchJson(`${BASE}/nutrition/products/${id}`, { method: 'DELETE' })
     },
   },
   settings: {

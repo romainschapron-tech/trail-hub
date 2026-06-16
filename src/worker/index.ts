@@ -5,6 +5,7 @@ import { trackingRoutes } from './routes/tracking'
 import { settingsRoutes } from './routes/settings'
 import { statsRoutes } from './routes/stats'
 import { stravaRoutes } from './routes/strava'
+import { nutritionRoutes } from './routes/nutrition'
 import { syncStravaActivities, isStravaConnected } from './strava'
 
 export type AppEnv = {
@@ -15,6 +16,7 @@ export type AppEnv = {
     NOTIFICATION_EMAIL: string
     STRAVA_CLIENT_ID: string
     STRAVA_CLIENT_SECRET: string
+    ANTHROPIC_API_KEY: string
   }
 }
 
@@ -27,6 +29,7 @@ app.route('/api/tracking', trackingRoutes)
 app.route('/api/settings', settingsRoutes)
 app.route('/api/stats', statsRoutes)
 app.route('/api/strava', stravaRoutes)
+app.route('/api/nutrition', nutritionRoutes)
 
 app.get('/api/dashboard/stats', async (c) => {
   const db = c.env.DB

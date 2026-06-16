@@ -146,6 +146,9 @@ interface StravaSummaryActivity {
   pr_count?: number
   achievement_count?: number
   gear_id?: string | null
+  average_heartrate?: number
+  max_heartrate?: number
+  has_heartrate?: boolean
 }
 
 // Upsert a page of activities into the strava_activities table.
@@ -155,8 +158,9 @@ async function upsertActivities(env: Env, activities: StravaSummaryActivity[]): 
     `INSERT OR REPLACE INTO strava_activities
        (id, name, sport_type, start_date, distance_m, moving_time_s, elapsed_time_s,
         elevation_gain, avg_speed, max_speed, relative_effort, calories, avg_cadence,
-        kudos_count, pr_count, achievement_count, gear_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        kudos_count, pr_count, achievement_count, gear_id,
+        average_heartrate, max_heartrate, has_heartrate)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
   const batch = activities.map((a) =>
     stmt.bind(
@@ -177,7 +181,10 @@ async function upsertActivities(env: Env, activities: StravaSummaryActivity[]): 
       a.kudos_count ?? 0,
       a.pr_count ?? 0,
       a.achievement_count ?? 0,
-      a.gear_id ?? null
+      a.gear_id ?? null,
+      a.average_heartrate ?? null,
+      a.max_heartrate ? Math.round(a.max_heartrate) : null,
+      a.has_heartrate ? 1 : 0
     )
   )
   await env.DB.batch(batch)
@@ -211,6 +218,20 @@ export async function syncStravaActivities(env: Env): Promise<number> {
     total += await upsertActivities(env, activities)
     if (activities.length < 100) break
     page++
+  }
+
+  // Refresh the athlete's HR zone boundaries (cheap, once per sync).
+  try {
+    const zres = await fetch('https://www.strava.com/api/v3/athlete/zones', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (zres.ok) {
+      const zdata = (await zres.json()) as { heart_rate?: { zones?: { min: number; max: number }[] } }
+      const hz = zdata.heart_rate?.zones
+      if (hz && hz.length) await setSetting(env, 'strava_hr_zones', JSON.stringify(hz))
+    }
+  } catch (e) {
+    console.error('strava zones fetch', e)
   }
 
   await setSetting(env, K_LAST_SYNC, new Date().toISOString())

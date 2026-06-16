@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '@/lib/api'
+import type { Race } from '@/lib/types'
 import { COUNTRIES, RACE_FORMATS } from '@/lib/constants'
 
 export const Route = createFileRoute('/races_/new')({
@@ -49,7 +50,7 @@ function NewRacePage() {
         max_participants: form.max_participants ? Number(form.max_participants) : null,
         itra_points: form.itra_points ? Number(form.itra_points) : null,
       }
-      const race = await api.races.create(data)
+      const race = await api.races.create(data as Partial<Race>)
       navigate({ to: '/races/$raceId', params: { raceId: String(race.id) } })
     } finally {
       setSaving(false)
@@ -103,7 +104,7 @@ function NewRacePage() {
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Region</label>
+            <label className="form-label">Région</label>
             <input className="form-input" value={form.region} onChange={(e) => update('region', e.target.value)} placeholder="Haute-Savoie" />
           </div>
         </div>
@@ -136,7 +137,7 @@ function NewRacePage() {
 
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Prix (EUR)</label>
+            <label className="form-label">Prix (€)</label>
             <input className="form-input" type="number" step="0.01" value={form.price_eur} onChange={(e) => update('price_eur', e.target.value)} />
           </div>
           <div className="form-group">

@@ -128,12 +128,39 @@ export interface StravaSport {
 export interface StravaLoad {
   acuteKm: number
   acuteElevation: number
+  acuteEffort: number
   chronicKm: number
   chronicElevation: number
+  chronicEffort: number
   ratio: number | null
+  ratioEffort: number | null
   streakWeeks: number
   bestWeek: { week: string; km: number } | null
   bestMonth: { month: string; km: number } | null
+}
+
+export interface NutritionProduct {
+  id: number
+  ext_id: string | null
+  name: string
+  brand: string | null
+  type: string | null
+  weight_g: number | null
+  carbs_g: number | null
+  sugar_g: number | null
+  protein_g: number | null
+  fat_g: number | null
+  caffeine_mg: number | null
+  sodium_mg: number | null
+  price_eur: number | null
+  image_url: string | null
+  source_url: string | null
+}
+
+export interface StravaHr {
+  total: number
+  zones: { label: string; min: number; max: number | null; count: number }[]
+  trend: { month: string; avg_hr: number }[]
 }
 
 export interface StravaElevation {
@@ -141,6 +168,22 @@ export interface StravaElevation {
   elevation: number
   km: number
   ratio_dplus_per_km: number
+}
+
+export interface StravaOverview {
+  year: string
+  activities: number
+  km: number
+  runKm: number
+  elevation: number
+  hours: number
+  allTime: {
+    activities: number
+    km: number
+    elevation: number
+    hours: number
+  }
+  longestRun: { name: string; km: number; elevation: number; start_date: string } | null
 }
 
 export interface ScrapeLog {

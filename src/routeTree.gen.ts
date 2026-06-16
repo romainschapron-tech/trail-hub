@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrainingRouteImport } from './routes/training'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as PlannerRouteImport } from './routes/planner'
+import { Route as NutritionRouteImport } from './routes/nutrition'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as RacesRouteRouteImport } from './routes/races/route'
 import { Route as IndexRouteImport } from './routes/index'
@@ -34,6 +36,16 @@ const StatsRoute = StatsRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlannerRoute = PlannerRouteImport.update({
+  id: '/planner',
+  path: '/planner',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NutritionRoute = NutritionRouteImport.update({
+  id: '/nutrition',
+  path: '/nutrition',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -81,6 +93,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/races': typeof RacesRouteRouteWithChildren
   '/dashboard': typeof DashboardRoute
+  '/nutrition': typeof NutritionRoute
+  '/planner': typeof PlannerRoute
   '/settings': typeof SettingsRoute
   '/stats': typeof StatsRoute
   '/training': typeof TrainingRoute
@@ -93,6 +107,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/nutrition': typeof NutritionRoute
+  '/planner': typeof PlannerRoute
   '/settings': typeof SettingsRoute
   '/stats': typeof StatsRoute
   '/training': typeof TrainingRoute
@@ -107,6 +123,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/races': typeof RacesRouteRouteWithChildren
   '/dashboard': typeof DashboardRoute
+  '/nutrition': typeof NutritionRoute
+  '/planner': typeof PlannerRoute
   '/settings': typeof SettingsRoute
   '/stats': typeof StatsRoute
   '/training': typeof TrainingRoute
@@ -122,6 +140,8 @@ export interface FileRouteTypes {
     | '/'
     | '/races'
     | '/dashboard'
+    | '/nutrition'
+    | '/planner'
     | '/settings'
     | '/stats'
     | '/training'
@@ -134,6 +154,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/dashboard'
+    | '/nutrition'
+    | '/planner'
     | '/settings'
     | '/stats'
     | '/training'
@@ -147,6 +169,8 @@ export interface FileRouteTypes {
     | '/'
     | '/races'
     | '/dashboard'
+    | '/nutrition'
+    | '/planner'
     | '/settings'
     | '/stats'
     | '/training'
@@ -161,6 +185,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   RacesRouteRoute: typeof RacesRouteRouteWithChildren
   DashboardRoute: typeof DashboardRoute
+  NutritionRoute: typeof NutritionRoute
+  PlannerRoute: typeof PlannerRoute
   SettingsRoute: typeof SettingsRoute
   StatsRoute: typeof StatsRoute
   TrainingRoute: typeof TrainingRoute
@@ -188,6 +214,20 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/planner': {
+      id: '/planner'
+      path: '/planner'
+      fullPath: '/planner'
+      preLoaderRoute: typeof PlannerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/nutrition': {
+      id: '/nutrition'
+      path: '/nutrition'
+      fullPath: '/nutrition'
+      preLoaderRoute: typeof NutritionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -271,6 +311,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   RacesRouteRoute: RacesRouteRouteWithChildren,
   DashboardRoute: DashboardRoute,
+  NutritionRoute: NutritionRoute,
+  PlannerRoute: PlannerRoute,
   SettingsRoute: SettingsRoute,
   StatsRoute: StatsRoute,
   TrainingRoute: TrainingRoute,

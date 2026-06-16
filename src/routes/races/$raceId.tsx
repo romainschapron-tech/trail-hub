@@ -2,8 +2,22 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
 import type { RaceWithTracking } from '@/lib/types'
-import { formatDate, formatDistance, formatElevation, daysUntil } from '@/lib/formatters'
-import { TRACKING_STATUSES } from '@/lib/constants'
+import { formatDate, daysUntil } from '@/lib/formatters'
+import { TRACKING_STATUSES, RACE_FORMATS } from '@/lib/constants'
+
+function HeroTile({ value, unit, label, color }: { value: string; unit?: string; label: string; color?: string }) {
+  return (
+    <div style={{ flex: 1, textAlign: 'center', padding: '0.9rem 0.5rem' }}>
+      <div style={{ fontSize: '1.7rem', fontWeight: 800, color: color ?? 'var(--text)', lineHeight: 1 }}>
+        {value}
+        {unit && <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', marginLeft: 3 }}>{unit}</span>}
+      </div>
+      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: '0.35rem' }}>
+        {label}
+      </div>
+    </div>
+  )
+}
 
 export const Route = createFileRoute('/races/$raceId')({
   component: RaceDetailPage,
@@ -13,8 +27,8 @@ function RegistrationBadge({ status }: { status: string | null }) {
   const config: Record<string, { label: string; bg: string; color: string }> = {
     open: { label: 'Places disponibles', bg: 'rgba(34, 197, 94, 0.15)', color: '#4ade80' },
     full: { label: 'Complet', bg: 'rgba(239, 68, 68, 0.15)', color: '#f87171' },
-    closed: { label: 'Inscriptions fermees', bg: 'rgba(239, 68, 68, 0.15)', color: '#f87171' },
-    upcoming: { label: 'Inscriptions bientot', bg: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa' },
+    closed: { label: 'Inscriptions fermées', bg: 'rgba(239, 68, 68, 0.15)', color: '#f87171' },
+    upcoming: { label: 'Inscriptions bientôt', bg: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa' },
   }
   const c = config[status || '']
   if (!c) return null
@@ -78,6 +92,19 @@ function RaceDetailPage() {
             <RegistrationBadge status={race.registration_status} />
           </div>
 
+          <div style={{ display: 'flex', background: 'var(--bg)', borderRadius: 'var(--radius)', marginBottom: '1.25rem' }}>
+            <HeroTile value={race.distance_km ? String(race.distance_km) : '-'} unit="km" label="Distance" color="var(--primary)" />
+            <div style={{ width: 1, background: 'var(--border)' }} />
+            <HeroTile value={race.elevation_gain ? race.elevation_gain.toLocaleString('fr-FR') : '-'} unit="m" label="Dénivelé +" />
+            <div style={{ width: 1, background: 'var(--border)' }} />
+            <HeroTile
+              value={race.distance_km && race.elevation_gain ? String(Math.round(race.elevation_gain / race.distance_km)) : '-'}
+              unit="m/km"
+              label="Ratio D+"
+              color="#f59e0b"
+            />
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div>
               <div className="form-label">Date</div>
@@ -88,20 +115,12 @@ function RaceDetailPage() {
               <div>{race.city ? `${race.city}, ` : ''}{race.country}</div>
             </div>
             <div>
-              <div className="form-label">Distance</div>
-              <div>{formatDistance(race.distance_km)}</div>
-            </div>
-            <div>
-              <div className="form-label">Denivele</div>
-              <div>{formatElevation(race.elevation_gain)}</div>
-            </div>
-            <div>
               <div className="form-label">Format</div>
-              <div>{race.race_format}</div>
+              <div>{RACE_FORMATS.find((f) => f.value === race.race_format)?.label ?? race.race_format}</div>
             </div>
             <div>
               <div className="form-label">Prix</div>
-              <div>{race.price_eur ? `${race.price_eur} EUR` : '-'}</div>
+              <div>{race.price_eur ? `${race.price_eur} €` : '-'}</div>
             </div>
             <div>
               <div className="form-label">Places max</div>

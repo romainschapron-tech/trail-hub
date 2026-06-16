@@ -1,12 +1,101 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
-import type { DashboardStats, RaceWithTracking } from '@/lib/types'
+import type { DashboardStats, RaceWithTracking, StravaOverview } from '@/lib/types'
 import { formatDate, formatDistance, formatElevation, daysUntil } from '@/lib/formatters'
+import { IconCatalog, IconBookmark, IconCalendar, IconAlarm } from '@/components/layout/Icons'
+
+function StatCard({
+  value,
+  label,
+  icon,
+  color = 'var(--primary)',
+}: {
+  value: string | number
+  label: string
+  icon: React.ReactNode
+  color?: string
+}) {
+  return (
+    <div className="stat-card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div className="stat-value">{value}</div>
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 34,
+            height: 34,
+            borderRadius: 9,
+            background: `color-mix(in srgb, ${color} 14%, transparent)`,
+            color,
+          }}
+        >
+          {icon}
+        </span>
+      </div>
+      <div className="stat-label">{label}</div>
+    </div>
+  )
+}
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardPage,
 })
+
+function HeroStat({ value, unit, label, accent }: { value: string; unit?: string; label: string; accent?: boolean }) {
+  return (
+    <div style={{ flex: 1, minWidth: 130, padding: '1.25rem 1.5rem' }}>
+      <div style={{ fontSize: '2.2rem', fontWeight: 800, lineHeight: 1, color: accent ? 'var(--primary)' : 'var(--text)' }}>
+        {value}
+        {unit && <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-muted)', marginLeft: 4 }}>{unit}</span>}
+      </div>
+      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        {label}
+      </div>
+    </div>
+  )
+}
+
+function YearHero() {
+  const [ov, setOv] = useState<StravaOverview | null>(null)
+  useEffect(() => {
+    api.stats.stravaOverview().then(setOv).catch(() => setOv(null))
+  }, [])
+
+  if (!ov || ov.activities === 0) return null
+
+  return (
+    <div
+      className="card"
+      style={{
+        marginBottom: '1.5rem',
+        padding: 0,
+        background: 'linear-gradient(135deg, var(--bg-elevated, #1a2332) 0%, var(--bg, #11151f) 100%)',
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1.5rem 0', flexWrap: 'wrap', gap: '0.25rem' }}>
+        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+          Ma saison {ov.year}
+        </span>
+        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+          Total : {ov.allTime.km.toLocaleString('fr-FR')} km · {ov.allTime.elevation.toLocaleString('fr-FR')} m D+ depuis 2019
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+        <HeroStat value={ov.km.toLocaleString('fr-FR')} unit="km" label="Distance" accent />
+        <HeroStat value={ov.elevation.toLocaleString('fr-FR')} unit="m" label="Dénivelé +" />
+        <HeroStat value={String(ov.activities)} label="Activités" />
+        <HeroStat value={ov.hours.toLocaleString('fr-FR')} unit="h" label="Temps de sport" />
+        {ov.longestRun && (
+          <HeroStat value={String(ov.longestRun.km)} unit="km" label="Plus longue sortie" />
+        )}
+      </div>
+    </div>
+  )
+}
 
 function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -49,25 +138,32 @@ function DashboardPage() {
         <h1 className="page-title">Dashboard</h1>
       </div>
 
+      <YearHero />
+
       <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-value">{stats?.totalRaces ?? '-'}</div>
-          <div className="stat-label">Courses au catalogue</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{stats?.trackedRaces ?? '-'}</div>
-          <div className="stat-label">Courses suivies</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{stats?.upcomingRegistered ?? '-'}</div>
-          <div className="stat-label">Inscriptions a venir</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value" style={{ color: 'var(--warning)' }}>
-            {stats?.upcomingDeadlines ?? '-'}
-          </div>
-          <div className="stat-label">Deadlines dans 30j</div>
-        </div>
+        <StatCard
+          value={stats?.totalRaces ?? '-'}
+          label="Courses au catalogue"
+          icon={<IconCatalog size={18} />}
+        />
+        <StatCard
+          value={stats?.trackedRaces ?? '-'}
+          label="Courses suivies"
+          icon={<IconBookmark size={18} />}
+          color="var(--accent)"
+        />
+        <StatCard
+          value={stats?.upcomingRegistered ?? '-'}
+          label="Inscriptions à venir"
+          icon={<IconCalendar size={18} />}
+          color="var(--success)"
+        />
+        <StatCard
+          value={stats?.upcomingDeadlines ?? '-'}
+          label="Deadlines dans 30j"
+          icon={<IconAlarm size={18} />}
+          color="var(--warning)"
+        />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
@@ -138,7 +234,9 @@ function DashboardPage() {
               </thead>
               <tbody>
                 {visiblePastRaces.map((race) => {
-                  const isTopTen = race.finish_position != null && race.finish_position <= 10
+                  const pos = race.finish_position
+                  const medal = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : null
+                  const isTopTen = pos != null && pos <= 10
                   return (
                     <tr key={race.id} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td style={{ padding: '0.5rem' }}>
@@ -159,9 +257,9 @@ function DashboardPage() {
                         {race.finish_time ?? '-'}
                       </td>
                       <td style={{ padding: '0.5rem' }}>
-                        {race.finish_position != null ? (
-                          <span style={{ color: isTopTen ? 'var(--success, #22c55e)' : 'var(--text)', fontWeight: isTopTen ? 600 : 400 }}>
-                            {isTopTen && '🏆 '}{race.finish_position}e
+                        {pos != null ? (
+                          <span style={{ color: medal ? '#fbbf24' : isTopTen ? 'var(--success, #22c55e)' : 'var(--text)', fontWeight: isTopTen ? 600 : 400 }}>
+                            {medal && `${medal} `}{pos}e
                           </span>
                         ) : '-'}
                       </td>
