@@ -43,7 +43,8 @@ stravaRoutes.get('/callback', async (c) => {
 // Manual "sync now" trigger.
 stravaRoutes.post('/sync', async (c) => {
   try {
-    const count = await syncStravaActivities(c.env)
+    const full = c.req.query('full') === '1'
+    const count = await syncStravaActivities(c.env, full)
     return c.json({ ok: true, synced: count })
   } catch (e) {
     return c.json({ ok: false, error: (e as Error).message }, 500)

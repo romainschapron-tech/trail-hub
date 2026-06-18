@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useMemo } from 'react'
 import { api } from '@/lib/api'
-import type { YearlyStats, RaceWithTracking } from '@/lib/types'
+import type { YearlyStats, RaceWithTracking, StravaYearly } from '@/lib/types'
 
 export const Route = createFileRoute('/stats')({
   component: StatsPage,
@@ -37,14 +37,87 @@ function Bar({ value, max, color = 'var(--primary)' }: { value: number; max: num
   )
 }
 
+const GROUP_COLORS: Record<string, string> = {
+  Route: '#6366f1', Trail: '#3b82f6', Rando: '#f59e0b', Vélo: '#22c55e', Ski: '#a855f7', Autre: '#64748b',
+}
+
+// Stacked horizontal bar: segments sized by value, scaled to max.
+function StackedBar({ segments, max }: { segments: { grp: string; value: number }[]; max: number }) {
+  return (
+    <div style={{ display: 'flex', height: 16, background: 'var(--border)', borderRadius: 4, overflow: 'hidden', width: '100%' }}>
+      {segments.map((s) => (
+        <div key={s.grp} title={`${s.grp} : ${s.value.toLocaleString('fr-FR')}`}
+          style={{ width: `${(s.value / max) * 100}%`, background: GROUP_COLORS[s.grp] || '#64748b' }} />
+      ))}
+    </div>
+  )
+}
+
+function TrainingByYear({ training }: { training: StravaYearly[] }) {
+  const years = Array.from(new Set(training.map((t) => t.year))).sort()
+  const distGroups = ['Route', 'Trail', 'Rando', 'Vélo']
+  const elevGroups = ['Route', 'Trail', 'Rando'] // foot climbing only — ski/vélo D+ misleading
+  const seg = (year: string, groups: string[], field: 'km' | 'elevation') =>
+    groups.map((g) => ({ grp: g, value: training.filter((t) => t.year === year && t.grp === g).reduce((a, t) => a + t[field], 0) }))
+  const total = (year: string, groups: string[], field: 'km' | 'elevation') => seg(year, groups, field).reduce((a, s) => a + s.value, 0)
+  const maxDist = Math.max(...years.map((y) => total(y, distGroups, 'km')), 1)
+  const maxElev = Math.max(...years.map((y) => total(y, elevGroups, 'elevation')), 1)
+  const usedGroups = distGroups.filter((g) => training.some((t) => t.grp === g && t.km > 0))
+
+  return (
+    <div className="card" style={{ marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+        <h2 style={{ fontSize: '1rem', margin: 0 }}>Volume d'entraînement par année</h2>
+        <div style={{ display: 'flex', gap: '0.85rem', fontSize: '0.72rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+          {usedGroups.map((g) => (
+            <span key={g} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: GROUP_COLORS[g] }} />{g}
+            </span>
+          ))}
+        </div>
+      </div>
+      <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: 0, marginBottom: '1.1rem' }}>
+        Distance par sport · le dénivelé ne compte que la course à pied (le ski/vélo fausserait le D+).
+      </p>
+      {training.length === 0 ? (
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Chargement…</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+          {years.slice().reverse().map((y) => {
+            const distTotal = total(y, distGroups, 'km')
+            const elevTotal = total(y, elevGroups, 'elevation')
+            const runKm = total(y, ['Route', 'Trail', 'Rando'], 'km')
+            return (
+              <div key={y} style={{ display: 'flex', alignItems: 'center', gap: '0.9rem' }}>
+                <span style={{ width: 40, fontWeight: 600 }}>{y}</span>
+                <div style={{ flex: 1 }}>
+                  <StackedBar segments={seg(y, distGroups, 'km')} max={maxDist} />
+                </div>
+                <span style={{ width: 92, textAlign: 'right', fontSize: '0.8rem', fontVariantNumeric: 'tabular-nums' }}>
+                  {Math.round(runKm).toLocaleString('fr-FR')} km <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>à pied</span>
+                </span>
+                <span style={{ width: 78, textAlign: 'right', fontSize: '0.78rem', color: '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>
+                  {elevTotal.toLocaleString('fr-FR')} m
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function StatsPage() {
   const [yearly, setYearly] = useState<YearlyStats[]>([])
+  const [training, setTraining] = useState<StravaYearly[]>([])
   const [pastRaces, setPastRaces] = useState<RaceWithTracking[]>([])
   const [targetKm, setTargetKm] = useState('')
   const [targetElev, setTargetElev] = useState('')
 
   useEffect(() => {
     api.stats.yearly().then(setYearly).catch(console.error)
+    api.stats.stravaYearlyTraining().then(setTraining).catch(console.error)
     api.races
       .list({ trackingStatus: 'completed', sort: 'race_date', order: 'asc', limit: 200 })
       .then((r) => setPastRaces(r.data))
@@ -106,9 +179,12 @@ function StatsPage() {
         <h1 className="page-title">Statistiques</h1>
       </div>
 
-      {/* Yearly comparison */}
+      {/* Training volume per year, split by sport */}
+      <TrainingByYear training={training} />
+
+      {/* Race results per year */}
       <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <h2 style={{ fontSize: '1rem', marginBottom: '1.25rem' }}>Par année</h2>
+        <h2 style={{ fontSize: '1rem', marginBottom: '1.25rem' }}>Résultats en course par année</h2>
 
         {yearly.length === 0 ? (
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Chargement…</p>

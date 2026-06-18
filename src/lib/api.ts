@@ -1,4 +1,4 @@
-import type { Race, RaceWithTracking, RaceFilters, DashboardStats, YearlyStats, StravaWeekly, StravaMonthly, StravaSport, StravaLoad, StravaElevation, StravaOverview, StravaHr, NutritionProduct } from './types'
+import type { Race, RaceWithTracking, RaceFilters, DashboardStats, YearlyStats, StravaWeekly, StravaMonthly, StravaSport, StravaLoad, StravaElevation, StravaOverview, StravaHr, StravaFitness, StravaPaceZones, StravaYearly, NutritionProduct } from './types'
 
 const BASE = '/api'
 
@@ -53,6 +53,25 @@ export const api = {
         method: 'DELETE',
       })
     },
+    geocode() {
+      return fetchJson<{ geocoded: number; processed: number; remaining: number }>(`${BASE}/races/geocode`, {
+        method: 'POST',
+      })
+    },
+    importEvents() {
+      return fetchJson<{ ok: boolean; scanned: number; matched: number }>(`${BASE}/races/import-events`, {
+        method: 'POST',
+      })
+    },
+    getGpx(id: number) {
+      return fetchJson<{ profile: import('./gpx').GpxRoute; totalDist: number; totalGain: number; fileName: string } | null>(`${BASE}/races/${id}/gpx`)
+    },
+    saveGpx(id: number, data: { profile: import('./gpx').GpxRoute; totalDist: number; totalGain: number; fileName: string }) {
+      return fetchJson<{ ok: boolean }>(`${BASE}/races/${id}/gpx`, { method: 'PUT', body: JSON.stringify(data) })
+    },
+    deleteGpx(id: number) {
+      return fetchJson<{ ok: boolean }>(`${BASE}/races/${id}/gpx`, { method: 'DELETE' })
+    },
   },
   tracking: {
     upsert(raceId: number, data: { status: string; notes?: string; training_readiness?: string }) {
@@ -98,6 +117,15 @@ export const api = {
     stravaPace() {
       return fetchJson<{ flatPaceSec: number; sampleCount: number }>(`${BASE}/stats/strava/pace`)
     },
+    stravaFitness() {
+      return fetchJson<StravaFitness>(`${BASE}/stats/strava/fitness`)
+    },
+    stravaPaceZones() {
+      return fetchJson<StravaPaceZones>(`${BASE}/stats/strava/pacezones`)
+    },
+    stravaYearlyTraining() {
+      return fetchJson<StravaYearly[]>(`${BASE}/stats/strava/yearly`)
+    },
   },
   nutrition: {
     list() {
@@ -107,6 +135,11 @@ export const api = {
       return fetchJson<{ ok: boolean; imported?: number; error?: string }>(`${BASE}/nutrition/import`, {
         method: 'POST',
         body: JSON.stringify(csvUrl ? { csvUrl } : {}),
+      })
+    },
+    fetchPhotos() {
+      return fetchJson<{ updated: number; processed: number; remaining: number }>(`${BASE}/nutrition/photos`, {
+        method: 'POST',
       })
     },
     addByUrl(url: string) {

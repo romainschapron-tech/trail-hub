@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
-import type { StravaWeekly, StravaMonthly, StravaSport, StravaLoad, StravaElevation, StravaHr } from '@/lib/types'
+import type { StravaWeekly, StravaMonthly, StravaSport, StravaLoad, StravaElevation, StravaFitness, StravaPaceZones } from '@/lib/types'
 
 export const Route = createFileRoute('/training')({
   component: TrainingPage,
@@ -24,6 +24,13 @@ function weekStart(yw: string) {
   const d = new Date(jan4)
   d.setDate(jan4.getDate() - dow + 1 + (+w - 1) * 7)
   return d
+}
+
+function fmtPace(sec: number | null) {
+  if (!sec || !isFinite(sec)) return '—'
+  const m = Math.floor(sec / 60)
+  const s = Math.round(sec % 60)
+  return `${m}:${String(s).padStart(2, '0')}/km`
 }
 
 function ratioColor(r: number | null) {
@@ -92,10 +99,17 @@ function TrainingPage() {
   const [sports, setSports] = useState<StravaSport[]>([])
   const [load, setLoad] = useState<StravaLoad | null>(null)
   const [elevation, setElevation] = useState<StravaElevation[]>([])
-  const [hr, setHr] = useState<StravaHr | null>(null)
+  const [fitness, setFitness] = useState<StravaFitness | null>(null)
+  const [pz, setPz] = useState<StravaPaceZones | null>(null)
   const [weekRange, setWeekRange] = useState(26)
+  const [weekView, setWeekView] = useState<'chart' | 'table'>('table')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    api.stats.stravaFitness().then(setFitness).catch(() => {})
+    api.stats.stravaPaceZones().then(setPz).catch(() => {})
+  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -105,10 +119,9 @@ function TrainingPage() {
       api.stats.stravaSports(),
       api.stats.stravaLoad(),
       api.stats.stravaElevation(),
-      api.stats.stravaHr(),
     ])
-      .then(([w, m, s, l, e, h]) => {
-        setWeekly(w); setMonthly(m); setSports(s); setLoad(l); setElevation(e); setHr(h)
+      .then(([w, m, s, l, e]) => {
+        setWeekly(w); setMonthly(m); setSports(s); setLoad(l); setElevation(e)
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
@@ -139,8 +152,8 @@ function TrainingPage() {
   const weekItems = weekly.map((w, i) => ({
     pct: (w.km / maxWeekKm) * 100,
     color: w.sports?.includes('Trail') ? '#3b82f6' : '#6366f1',
-    title: `${weekStart(w.week).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} — ${w.km} km`,
-    axis: i % labelEvery === 0 ? weekStart(w.week).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '',
+    title: `W${i + 1} · ${weekStart(w.week).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} — ${w.km} km`,
+    axis: i % labelEvery === 0 ? `W${i + 1}` : '',
   }))
 
   // YoY
@@ -148,15 +161,11 @@ function TrainingPage() {
   const prev12 = monthly.slice(-24, -12).reduce((a, m) => a + m.km, 0)
   const yoy = prev12 > 0 ? Math.round(((last12 - prev12) / prev12) * 100) : null
 
-  // HR
-  const maxZone = Math.max(...(hr?.zones.map((z) => z.count) ?? [1]), 1)
-  const hrTrend = hr?.trend ?? []
-  const trendItems = hrTrend.slice(-18).map((t) => ({
-    pct: ((t.avg_hr - 110) / (190 - 110)) * 100,
-    color: '#ef4444',
-    title: `${fmtMonth(t.month)} — ${t.avg_hr} bpm moy`,
-    axis: '',
-  }))
+  // Pace zones (VMA)
+  const maxZone = Math.max(...(pz?.zones.map((z) => z.count) ?? [1]), 1)
+  const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
+  const paceRange = (fast: number, slow: number) =>
+    slow >= 9999 ? `> ${mmss(fast)}` : fast <= 0 ? `< ${mmss(slow)}` : `${mmss(slow)}–${mmss(fast)}`
 
   // Sports
   const totalSportKm = sports.reduce((a, s) => a + s.km, 0)
@@ -186,6 +195,9 @@ function TrainingPage() {
           <Metric label="Ratio aigu/chronique" value={ratio !== null ? String(ratio) : '—'} sub={ratioLabel(ratio)} color={ratioColor(ratio)} />
           <Metric label="Semaines actives" value={`${load?.streakWeeks ?? 0}`} sub="sur 52 sem." />
           {load?.bestMonth && <Metric label="Meilleur mois" value={`${load.bestMonth.km} km`} sub={fmtMonth(load.bestMonth.month)} />}
+          {fitness?.vo2max && (
+            <Metric label="VO2max estimée" value={String(fitness.vo2max)} sub={fitness.bestRace ? `d'après ${fitness.bestRace.name}` : 'VDOT'} color="#22c55e" />
+          )}
         </div>
 
         <div className="card" style={{ padding: '1rem 1.25rem' }}>
@@ -212,12 +224,18 @@ function TrainingPage() {
       <section>
         <SectionTitle
           right={
-            <select className="form-select" style={{ width: 'auto', fontSize: '0.78rem', padding: '0.25rem 0.5rem' }} value={weekRange} onChange={(e) => setWeekRange(+e.target.value)}>
-              <option value={12}>12 sem.</option>
-              <option value={26}>26 sem.</option>
-              <option value={52}>52 sem.</option>
-              <option value={104}>2 ans</option>
-            </select>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <div className="view-switcher">
+                <button className={`view-btn ${weekView === 'table' ? 'active' : ''}`} onClick={() => setWeekView('table')}>Tableau</button>
+                <button className={`view-btn ${weekView === 'chart' ? 'active' : ''}`} onClick={() => setWeekView('chart')}>Graphe</button>
+              </div>
+              <select className="form-select" style={{ width: 'auto', fontSize: '0.78rem', padding: '0.25rem 0.5rem' }} value={weekRange} onChange={(e) => setWeekRange(+e.target.value)}>
+                <option value={12}>12 sem.</option>
+                <option value={26}>26 sem.</option>
+                <option value={52}>52 sem.</option>
+                <option value={104}>2 ans</option>
+              </select>
+            </div>
           }
         >
           Volume hebdomadaire
@@ -227,6 +245,36 @@ function TrainingPage() {
             {yoy >= 0 ? '+' : ''}{yoy}% sur 12 mois ({Math.round(last12)} km vs {Math.round(prev12)} km)
           </div>
         )}
+        {weekView === 'table' ? (
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ color: 'var(--text-muted)', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ padding: '0.6rem 1.25rem', fontWeight: 500 }}>Semaine</th>
+                  <th style={{ padding: '0.6rem 0.5rem', fontWeight: 500, textAlign: 'right' }}>km</th>
+                  <th style={{ padding: '0.6rem 0.5rem', fontWeight: 500, textAlign: 'right' }}>D+</th>
+                  <th style={{ padding: '0.6rem 1.25rem', fontWeight: 500, textAlign: 'right' }}>Sorties</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...weekly].reverse().map((w, i) => {
+                  const d = weekStart(w.week)
+                  const wn = weekly.length - i
+                  return (
+                    <tr key={w.week} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '0.5rem 1.25rem' }}>
+                        <strong>W{wn}</strong> <span style={{ color: 'var(--text-muted)' }}>· {d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' })}</span>
+                      </td>
+                      <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{w.km}</td>
+                      <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{w.elevation.toLocaleString('fr-FR')} m</td>
+                      <td style={{ padding: '0.5rem 1.25rem', textAlign: 'right', color: 'var(--text-muted)' }}>{w.count}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
         <div className="card" style={{ padding: '1.25rem 1.35rem' }}>
           <VerticalBars items={weekItems} height={170} />
           <div style={{ display: 'flex', gap: '1.25rem', marginTop: '0.9rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
@@ -234,43 +282,39 @@ function TrainingPage() {
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}><span style={{ width: 10, height: 10, borderRadius: 2, background: '#6366f1' }} /> Route / autre</span>
           </div>
         </div>
+        )}
       </section>
 
-      {/* ── Intensité : zones cardiaques ─────────────────── */}
+      {/* ── Intensité : zones d'allure (VMA) ─────────────── */}
       <section>
-        <SectionTitle right={hr && hr.total > 0 ? <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{hr.total} sorties avec FC</span> : undefined}>
-          Intensité — zones cardiaques
+        <SectionTitle right={pz && pz.total > 0 ? <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{pz.total} sorties</span> : undefined}>
+          Intensité — zones d'allure
         </SectionTitle>
-        {!hr || hr.total === 0 ? (
+        {!pz || pz.total === 0 ? (
           <div className="card" style={{ padding: '1.5rem', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
-            Pas encore de données de fréquence cardiaque. Elles arriveront automatiquement à la prochaine synchro Strava.
+            Pas encore assez de données. Les sorties apparaîtront après la synchro Strava.
           </div>
         ) : (
           <div className="card" style={{ padding: '1.25rem 1.35rem' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem', marginBottom: '1.25rem' }}>
-              {hr.zones.map((z, i) => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+              {pz.zones.map((z, i) => (
                 <div key={z.label} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <span style={{ width: 110, flexShrink: 0, fontSize: '0.78rem' }}>
-                    <strong style={{ color: ZONE_COLORS[i] }}>{z.label}</strong> <span style={{ color: 'var(--text-muted)' }}>{ZONE_NAMES[i]}</span>
+                  <span style={{ width: 118, flexShrink: 0, fontSize: '0.78rem' }}>
+                    <strong style={{ color: ZONE_COLORS[i] }}>{z.label}</strong> <span style={{ color: 'var(--text-muted)' }}>{z.name}</span>
                   </span>
-                  <span style={{ width: 78, flexShrink: 0, fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    {z.max ? `${z.min}-${z.max}` : `${z.min}+`} bpm
+                  <span style={{ width: 96, flexShrink: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {paceRange(z.fast, z.slow)} /km
                   </span>
                   <div style={{ flex: 1, height: 14, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
                     <div style={{ width: `${(z.count / maxZone) * 100}%`, height: '100%', background: ZONE_COLORS[i], borderRadius: 4, transition: 'width 0.4s ease' }} />
                   </div>
-                  <span style={{ width: 64, textAlign: 'right', fontSize: '0.78rem', color: 'var(--text-muted)' }}>{z.count} sorties</span>
+                  <span style={{ width: 64, textAlign: 'right', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{z.avgHr ? `${z.avgHr} bpm` : '—'}</span>
+                  <span style={{ width: 58, textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{z.count} sorties</span>
                 </div>
               ))}
             </div>
-            {trendItems.length > 1 && (
-              <>
-                <div style={{ fontSize: '0.78rem', fontWeight: 500, marginBottom: '0.5rem' }}>FC moyenne par mois (bpm)</div>
-                <VerticalBars items={trendItems} height={90} />
-              </>
-            )}
-            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.85rem', marginBottom: 0 }}>
-              Répartition par <strong>FC moyenne</strong> de chaque sortie (course à pied). Idéalement la majorité du volume en Z1–Z2.
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.95rem', marginBottom: 0 }}>
+              Chaque sortie classée selon son <strong>allure équivalent-plat</strong> (corrigée du dénivelé) dans tes zones VMA. FC moyenne observée indiquée à titre indicatif.
             </p>
           </div>
         )}
@@ -297,17 +341,34 @@ function TrainingPage() {
       {/* ── Terrain ──────────────────────────────────────── */}
       <section>
         <SectionTitle>Terrain & dénivelé</SectionTitle>
-        <div className="card" style={{ padding: '1.25rem 1.35rem' }}>
-          <div style={{ fontSize: '0.78rem', fontWeight: 500, marginBottom: '0.6rem' }}>D+ par mois (m)</div>
-          <VerticalBars
-            items={elevation.slice(-24).map((e) => ({
-              pct: (e.elevation / maxElev) * 100,
-              color: '#f59e0b',
-              title: `${fmtMonth(e.month)} — ${e.elevation.toLocaleString('fr-FR')} m`,
-              axis: '',
-            }))}
-            height={120}
-          />
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+            <thead>
+              <tr style={{ color: 'var(--text-muted)', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
+                <th style={{ padding: '0.6rem 1.25rem', fontWeight: 500 }}>Mois</th>
+                <th style={{ padding: '0.6rem 0.5rem', fontWeight: 500, width: '34%' }}>Dénivelé +</th>
+                <th style={{ padding: '0.6rem 0.5rem', fontWeight: 500, textAlign: 'right' }}>Distance</th>
+                <th style={{ padding: '0.6rem 1.25rem', fontWeight: 500, textAlign: 'right' }}>Ratio D+/km</th>
+              </tr>
+            </thead>
+            <tbody>
+              {elevation.slice(-12).reverse().map((e) => (
+                <tr key={e.month} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ padding: '0.5rem 1.25rem', fontWeight: 500, textTransform: 'capitalize' }}>{fmtMonth(e.month)}</td>
+                  <td style={{ padding: '0.5rem 0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <div style={{ flex: 1, height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{ width: `${(e.elevation / maxElev) * 100}%`, height: '100%', background: '#f59e0b', borderRadius: 4 }} />
+                      </div>
+                      <span style={{ minWidth: 60, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{e.elevation.toLocaleString('fr-FR')} m</span>
+                    </div>
+                  </td>
+                  <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{e.km} km</td>
+                  <td style={{ padding: '0.5rem 1.25rem', textAlign: 'right', fontWeight: 600, color: e.ratio_dplus_per_km >= 30 ? '#f59e0b' : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{e.ratio_dplus_per_km} m/km</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
     </div>

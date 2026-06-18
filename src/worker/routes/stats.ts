@@ -8,17 +8,18 @@ statsRoutes.get('/strava/overview', async (c) => {
   const db = c.env.DB
   const year = c.req.query('year') || new Date().getFullYear().toString()
 
+  // Foot-based volume only — cycling/ski distort distance & D+.
   const agg = `
     SELECT
       COUNT(*) AS activities,
       ROUND(SUM(distance_m) / 1000.0, 0) AS km,
       COALESCE(SUM(elevation_gain), 0) AS elevation,
       ROUND(SUM(moving_time_s) / 3600.0, 0) AS hours,
-      COALESCE(SUM(CASE WHEN sport_type IN ('Run','TrailRun','Hike') THEN distance_m ELSE 0 END) / 1000.0, 0) AS run_km
-    FROM strava_activities`
+      ROUND(SUM(distance_m) / 1000.0, 0) AS run_km
+    FROM strava_activities WHERE sport_type IN ('Run','TrailRun','Hike')`
 
   const [yearRow, allRow, longest] = await Promise.all([
-    db.prepare(`${agg} WHERE strftime('%Y', start_date) = ?`).bind(year)
+    db.prepare(`${agg} AND strftime('%Y', start_date) = ?`).bind(year)
       .first<{ activities: number; km: number; elevation: number; hours: number; run_km: number }>(),
     db.prepare(agg)
       .first<{ activities: number; km: number; elevation: number; hours: number; run_km: number }>(),
@@ -46,6 +47,137 @@ statsRoutes.get('/strava/overview', async (c) => {
     },
     longestRun: longest ?? null,
   })
+})
+
+// Estimated VO2max (Daniels VDOT) from best race + real pace per HR zone.
+statsRoutes.get('/strava/fitness', async (c) => {
+  const db = c.env.DB
+
+  const races = await db
+    .prepare(
+      `SELECT r.distance_km AS d, t.finish_time AS ft, r.name AS name, r.race_date AS date
+       FROM races r JOIN tracking t ON t.race_id = r.id
+       WHERE t.status = 'completed' AND t.finish_time IS NOT NULL
+         AND r.distance_km BETWEEN 3 AND 60`
+    )
+    .all<{ d: number; ft: string; name: string; date: string }>()
+
+  const toMin = (ft: string): number | null => {
+    const p = ft.split(':').map(Number)
+    if (p.some(isNaN)) return null
+    if (p.length === 3) return p[0] * 60 + p[1] + p[2] / 60
+    if (p.length === 2) return p[0] + p[1] / 60
+    return null
+  }
+  let vdot = 0
+  let best: { name: string; date: string; vdot: number } | null = null
+  for (const r of races.results) {
+    const t = toMin(r.ft)
+    if (!t || t < 10 || !r.d) continue
+    const v = (r.d * 1000) / t // m/min
+    const pVO2 = -4.6 + 0.182258 * v + 0.000104 * v * v
+    const pct = 0.8 + 0.1894393 * Math.exp(-0.012778 * t) + 0.2989558 * Math.exp(-0.1932605 * t)
+    const vd = pVO2 / pct
+    if (vd > vdot) { vdot = vd; best = { name: r.name, date: r.date, vdot: Math.round(vd * 10) / 10 } }
+  }
+
+  const zonesRow = await db.prepare(`SELECT value FROM app_settings WHERE key='strava_hr_zones'`).first<{ value: string }>()
+  const zones: { min: number; max: number }[] = zonesRow
+    ? JSON.parse(zonesRow.value)
+    : [{ min: 0, max: 130 }, { min: 131, max: 150 }, { min: 151, max: 165 }, { min: 166, max: 180 }, { min: 181, max: 220 }]
+
+  const paceZones = await Promise.all(
+    zones.map((z, i) => {
+      const upper = i === zones.length - 1 ? 999 : z.max
+      // Flat-equivalent pace (corrige le dénivelé : 100 m D+ ≈ 0.9 km) pour comparer les zones.
+      return db
+        .prepare(
+          `SELECT ROUND(AVG(moving_time_s * 1.0 / ((distance_m + COALESCE(elevation_gain,0) * 9) / 1000.0)), 0) AS pace, COUNT(*) AS n
+           FROM strava_activities
+           WHERE has_heartrate = 1 AND sport_type IN ('Run', 'TrailRun')
+             AND distance_m > 3000 AND moving_time_s > 0
+             AND average_heartrate >= ? AND average_heartrate <= ?`
+        )
+        .bind(z.min, upper)
+        .first<{ pace: number | null; n: number }>()
+    })
+  )
+
+  return c.json({
+    vo2max: vdot ? Math.round(vdot * 10) / 10 : null,
+    bestRace: best,
+    paceZones: zones.map((z, i) => ({
+      label: `Z${i + 1}`,
+      min: z.min,
+      max: i === zones.length - 1 ? null : z.max,
+      paceSec: paceZones[i]?.pace ?? null,
+      count: paceZones[i]?.n ?? 0,
+    })),
+  })
+})
+
+// Pace-zone distribution: sessions classified by flat-equivalent pace into the athlete's pace zones.
+statsRoutes.get('/strava/pacezones', async (c) => {
+  const db = c.env.DB
+  const stored = await db.prepare(`SELECT value FROM app_settings WHERE key='pace_zones'`).first<{ value: string }>()
+  // Defaults = zones VMA fournies par l'athlète (sec/km). fast = borne rapide, slow = borne lente.
+  const zones: { label: string; name: string; fast: number; slow: number }[] = stored
+    ? JSON.parse(stored.value)
+    : [
+        { label: 'Z1', name: 'Récup', fast: 315, slow: 99999 },
+        { label: 'Z2', name: 'Endurance', fast: 252, slow: 315 },
+        { label: 'Z3', name: 'Tempo', fast: 222, slow: 252 },
+        { label: 'Z4', name: 'Seuil', fast: 199, slow: 222 },
+        { label: 'Z5', name: 'VMA', fast: 0, slow: 199 },
+      ]
+
+  const rows = await Promise.all(
+    zones.map((z) =>
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n, ROUND(AVG(average_heartrate)) AS avg_hr
+           FROM strava_activities
+           WHERE sport_type IN ('Run', 'TrailRun') AND distance_m > 3000 AND moving_time_s > 0
+             AND (moving_time_s * 1.0 / ((distance_m + COALESCE(elevation_gain,0) * 9) / 1000.0)) >= ?
+             AND (moving_time_s * 1.0 / ((distance_m + COALESCE(elevation_gain,0) * 9) / 1000.0)) < ?`
+        )
+        .bind(z.fast, z.slow)
+        .first<{ n: number; avg_hr: number | null }>()
+    )
+  )
+  const total = rows.reduce((a, r) => a + (r?.n ?? 0), 0)
+  return c.json({
+    total,
+    zones: zones.map((z, i) => ({
+      label: z.label, name: z.name, fast: z.fast, slow: z.slow,
+      count: rows[i]?.n ?? 0, avgHr: rows[i]?.avg_hr ?? null,
+    })),
+  })
+})
+
+// Yearly training totals broken down by sport group (so cycling/ski don't skew running).
+statsRoutes.get('/strava/yearly', async (c) => {
+  const db = c.env.DB
+  const rows = await db
+    .prepare(
+      `SELECT strftime('%Y', start_date) AS year,
+              CASE
+                WHEN sport_type = 'Run' THEN 'Route'
+                WHEN sport_type = 'TrailRun' THEN 'Trail'
+                WHEN sport_type IN ('Ride','GravelRide','VirtualRide','EBikeRide') THEN 'Vélo'
+                WHEN sport_type = 'Hike' THEN 'Rando'
+                WHEN sport_type = 'AlpineSki' THEN 'Ski'
+                ELSE 'Autre'
+              END AS grp,
+              COUNT(*) AS activities,
+              ROUND(SUM(distance_m) / 1000.0, 0) AS km,
+              COALESCE(SUM(elevation_gain), 0) AS elevation,
+              ROUND(SUM(moving_time_s) / 3600.0, 0) AS hours
+       FROM strava_activities
+       GROUP BY year, grp ORDER BY year ASC`
+    )
+    .all<{ year: string; grp: string; activities: number; km: number; elevation: number; hours: number }>()
+  return c.json(rows.results)
 })
 
 // Reference flat pace (sec/km) derived from recent flat-ish runs — used by the race planner.
@@ -98,6 +230,7 @@ statsRoutes.get('/strava/weekly', async (c) => {
          GROUP_CONCAT(DISTINCT sport_type) AS sports
        FROM strava_activities
        WHERE start_date >= date('now', ? || ' days')
+         AND sport_type IN ('Run','TrailRun','Hike')
        GROUP BY week
        ORDER BY week ASC`
     )
@@ -118,9 +251,10 @@ statsRoutes.get('/strava/monthly', async (c) => {
          ROUND(SUM(distance_m) / 1000.0, 1) AS km,
          COALESCE(SUM(elevation_gain), 0) AS elevation,
          COUNT(*) AS count,
-         ROUND(SUM(CASE WHEN sport_type IN ('Trail Run', 'Run') THEN distance_m ELSE 0 END) / 1000.0, 1) AS run_km,
-         ROUND(SUM(CASE WHEN sport_type = 'Trail Run' THEN distance_m ELSE 0 END) / 1000.0, 1) AS trail_km
+         ROUND(SUM(CASE WHEN sport_type IN ('TrailRun', 'Run') THEN distance_m ELSE 0 END) / 1000.0, 1) AS run_km,
+         ROUND(SUM(CASE WHEN sport_type = 'TrailRun' THEN distance_m ELSE 0 END) / 1000.0, 1) AS trail_km
        FROM strava_activities
+       WHERE sport_type IN ('Run','TrailRun','Hike')
        GROUP BY month
        ORDER BY month ASC`
     )
@@ -160,7 +294,8 @@ statsRoutes.get('/strava/load', async (c) => {
       .prepare(
         `SELECT ROUND(SUM(distance_m) / 1000.0, 1) AS km, COALESCE(SUM(elevation_gain), 0) AS elevation,
                 COALESCE(SUM(relative_effort), 0) AS effort
-         FROM strava_activities WHERE start_date >= date('now', '-28 days')`
+         FROM strava_activities WHERE start_date >= date('now', '-28 days')
+           AND sport_type IN ('Run','TrailRun','Hike')`
       )
       .first<{ km: number; elevation: number; effort: number }>(),
 
@@ -169,7 +304,8 @@ statsRoutes.get('/strava/load', async (c) => {
       .prepare(
         `SELECT ROUND(SUM(distance_m) / 1000.0, 1) AS km, COALESCE(SUM(elevation_gain), 0) AS elevation,
                 COALESCE(SUM(relative_effort), 0) AS effort
-         FROM strava_activities WHERE start_date >= date('now', '-56 days') AND start_date < date('now', '-28 days')`
+         FROM strava_activities WHERE start_date >= date('now', '-56 days') AND start_date < date('now', '-28 days')
+           AND sport_type IN ('Run','TrailRun','Hike')`
       )
       .first<{ km: number; elevation: number; effort: number }>(),
 
@@ -179,7 +315,7 @@ statsRoutes.get('/strava/load', async (c) => {
         `SELECT COUNT(DISTINCT strftime('%Y-%W', start_date)) AS weeks
          FROM strava_activities
          WHERE start_date >= date('now', '-365 days')
-           AND sport_type IN ('Run', 'Trail Run', 'Hike')`
+           AND sport_type IN ('Run', 'TrailRun', 'Hike')`
       )
       .first<{ weeks: number }>(),
 
@@ -187,7 +323,7 @@ statsRoutes.get('/strava/load', async (c) => {
     db
       .prepare(
         `SELECT strftime('%Y-%W', start_date) AS week, ROUND(SUM(distance_m) / 1000.0, 1) AS km
-         FROM strava_activities
+         FROM strava_activities WHERE sport_type IN ('Run','TrailRun','Hike')
          GROUP BY week ORDER BY km DESC LIMIT 1`
       )
       .first<{ week: string; km: number }>(),
@@ -196,7 +332,7 @@ statsRoutes.get('/strava/load', async (c) => {
     db
       .prepare(
         `SELECT strftime('%Y-%m', start_date) AS month, ROUND(SUM(distance_m) / 1000.0, 1) AS km
-         FROM strava_activities
+         FROM strava_activities WHERE sport_type IN ('Run','TrailRun','Hike')
          GROUP BY month ORDER BY km DESC LIMIT 1`
       )
       .first<{ month: string; km: number }>(),

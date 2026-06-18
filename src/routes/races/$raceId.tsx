@@ -4,6 +4,121 @@ import { api } from '@/lib/api'
 import type { RaceWithTracking } from '@/lib/types'
 import { formatDate, daysUntil } from '@/lib/formatters'
 import { TRACKING_STATUSES, RACE_FORMATS } from '@/lib/constants'
+import { parseGpx, downsampleRoute, computeSplits, predictTotal, type GpxRoute } from '@/lib/gpx'
+
+function fmtClock(sec: number): string {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60)
+  return h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m}min`
+}
+
+// Elevation profile with aid-station markers (UTMB-style).
+function ProfileChart({ route, splits }: { route: GpxRoute; splits: { label: string; dist: number; cumSec: number }[] }) {
+  const W = 960, H = 250, padL = 44, padR = 12, padT = 28, padB = 64
+  const plotW = W - padL - padR, plotH = H - padT - padB
+  const eles = route.nodes.map((n) => n.ele)
+  const minE = Math.min(...eles), maxE = Math.max(...eles), rE = maxE - minE || 1
+  const x = (d: number) => padL + (d / route.totalDist) * plotW
+  const y = (e: number) => padT + (1 - (e - minE) / rE) * plotH
+  const pts = route.nodes.map((n) => `${x(n.dist).toFixed(1)},${y(n.ele).toFixed(1)}`).join(' ')
+  const splitByDist = (d: number) => splits.find((s) => Math.abs(s.dist - d) < 50)
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
+      {[minE, (minE + maxE) / 2, maxE].map((e, i) => (
+        <g key={i}>
+          <line x1={padL} y1={y(e)} x2={W - padR} y2={y(e)} stroke="var(--border)" strokeWidth="1" />
+          <text x={padL - 6} y={y(e) + 3} textAnchor="end" fontSize="10" fill="var(--text-muted)">{Math.round(e)}m</text>
+        </g>
+      ))}
+      <polygon points={`${padL},${padT + plotH} ${pts} ${W - padR},${padT + plotH}`} fill="rgba(249,115,22,0.18)" />
+      <polyline points={pts} fill="none" stroke="#f97316" strokeWidth="2" />
+      {route.waypoints.map((w, i) => {
+        const wx = x(w.dist), s = splitByDist(w.dist)
+        return (
+          <g key={i}>
+            <line x1={wx} y1={padT} x2={wx} y2={padT + plotH} stroke="#f97316" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+            <circle cx={wx} cy={padT + plotH} r="3.5" fill="#f97316" />
+            <rect x={wx - 16} y={6} width="32" height="17" rx="8" fill="#f97316" />
+            <text x={wx} y={18} textAnchor="middle" fontSize="10" fontWeight="700" fill="#fff">T{String(i + 1).padStart(2, '0')}</text>
+            <text x={wx} y={padT + plotH + 16} textAnchor="middle" fontSize="9.5" fill="var(--text)">{(w.dist / 1000).toFixed(1)} km</text>
+            <text x={wx} y={padT + plotH + 30} textAnchor="middle" fontSize="9" fill="var(--text-muted)">{w.name.slice(0, 16)}</text>
+            {s && <text x={wx} y={padT + plotH + 44} textAnchor="middle" fontSize="9.5" fontWeight="600" fill="#f97316">{fmtClock(s.cumSec)}</text>}
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+function GpxSection({ raceId }: { raceId: number }) {
+  const [route, setRoute] = useState<GpxRoute | null>(null)
+  const [fileName, setFileName] = useState('')
+  const [flatPace, setFlatPace] = useState(360)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    api.races.getGpx(raceId).then((d) => { if (d) { setRoute(d.profile); setFileName(d.fileName || '') } })
+    api.stats.stravaPace().then((p) => setFlatPace(p.flatPaceSec)).catch(() => {})
+  }, [raceId])
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    if (!f) return
+    setBusy(true); setErr(null)
+    try {
+      const r = downsampleRoute(parseGpx(await f.text()))
+      await api.races.saveGpx(raceId, { profile: r, totalDist: r.totalDist, totalGain: r.totalGain, fileName: f.name })
+      setRoute(r); setFileName(f.name)
+    } catch (e) { setErr((e as Error).message) }
+    finally { setBusy(false) }
+  }
+
+  async function remove() {
+    await api.races.deleteGpx(raceId)
+    setRoute(null); setFileName('')
+  }
+
+  const checkpoints = route
+    ? (route.waypoints.length >= 1
+        ? [...route.waypoints.map((w) => ({ label: w.name, dist: w.dist })), { label: 'Arrivée', dist: route.totalDist }]
+        : [{ label: 'Arrivée', dist: route.totalDist }])
+    : []
+  const splits = route ? computeSplits(route, flatPace, checkpoints) : []
+  const estimate = route ? predictTotal(route, flatPace) : 0
+
+  return (
+    <div className="card" style={{ marginTop: '1.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: route ? '1rem' : 0, flexWrap: 'wrap', gap: '0.5rem' }}>
+        <h3 style={{ fontSize: '1rem', margin: 0 }}>Profil & tracé GPX</h3>
+        {route ? (
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fileName}</span>
+            <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>Remplacer<input type="file" accept=".gpx" onChange={onFile} style={{ display: 'none' }} /></label>
+            <button className="btn btn-ghost btn-sm" onClick={remove}>Supprimer</button>
+          </div>
+        ) : (
+          <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer' }}>
+            {busy ? 'Analyse…' : 'Ajouter le tracé GPX'}
+            <input type="file" accept=".gpx" onChange={onFile} style={{ display: 'none' }} />
+          </label>
+        )}
+      </div>
+      {err && <p style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>{err}</p>}
+      {!route && !err && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>Importe le GPX de la course : le profil et tes temps de passage estimés seront mémorisés ici.</p>}
+      {route && (
+        <>
+          <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+            <span><strong style={{ color: 'var(--primary)' }}>{(route.totalDist / 1000).toFixed(1)} km</strong></span>
+            <span><strong>{route.totalGain.toLocaleString('fr-FR')} m</strong> <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>D+</span></span>
+            <span><strong style={{ color: '#22c55e' }}>{fmtClock(estimate)}</strong> <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>estimé</span></span>
+          </div>
+          <ProfileChart route={route} splits={splits} />
+        </>
+      )}
+    </div>
+  )
+}
 
 function HeroTile({ value, unit, label, color }: { value: string; unit?: string; label: string; color?: string }) {
   return (
@@ -203,6 +318,8 @@ function RaceDetailPage() {
           </div>
         </div>
       </div>
+
+      <GpxSection raceId={race.id} />
     </div>
   )
 }

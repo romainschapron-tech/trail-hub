@@ -163,6 +163,26 @@ export interface StravaHr {
   trend: { month: string; avg_hr: number }[]
 }
 
+export interface StravaPaceZones {
+  total: number
+  zones: { label: string; name: string; fast: number; slow: number; count: number; avgHr: number | null }[]
+}
+
+export interface StravaFitness {
+  vo2max: number | null
+  bestRace: { name: string; date: string; vdot: number } | null
+  paceZones: { label: string; min: number; max: number | null; paceSec: number | null; count: number }[]
+}
+
+export interface StravaYearly {
+  year: string
+  grp: string
+  activities: number
+  km: number
+  elevation: number
+  hours: number
+}
+
 export interface StravaElevation {
   month: string
   elevation: number

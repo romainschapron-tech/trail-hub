@@ -85,6 +85,22 @@ function NutritionLibraryPage() {
     await api.nutrition.remove(id)
   }
 
+  const [photoBusy, setPhotoBusy] = useState(false)
+  async function fetchPhotos() {
+    setPhotoBusy(true); setMsg(null)
+    try {
+      for (let i = 0; i < 60; i++) {
+        const r = await api.nutrition.fetchPhotos()
+        setMsg(`Photos : ${r.remaining} produits restants à chercher…`)
+        load()
+        if (r.remaining === 0 || r.processed === 0) break
+      }
+      setMsg('Recherche de photos terminée ✅')
+    } catch (e) {
+      setMsg(`Échec : ${(e as Error).message}`)
+    } finally { setPhotoBusy(false) }
+  }
+
   return (
     <div>
       <div className="page-header"><h1 className="page-title">Nutrition</h1></div>
@@ -104,6 +120,9 @@ function NutritionLibraryPage() {
           </button>
           <button className="btn btn-ghost" onClick={importSheet} disabled={busy} title="Recharger depuis le Google Sheet">
             Importer ma base
+          </button>
+          <button className="btn btn-ghost" onClick={fetchPhotos} disabled={photoBusy} title="Cherche les photos via Open Food Facts (best-effort)">
+            {photoBusy ? 'Recherche photos…' : 'Récupérer les photos'}
           </button>
         </div>
         {msg && <div style={{ fontSize: '0.8rem', marginTop: '0.6rem', color: msg.includes('✅') ? '#22c55e' : 'var(--danger)' }}>{msg}</div>}

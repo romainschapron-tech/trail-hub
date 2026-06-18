@@ -1,5 +1,6 @@
 import { createFileRoute, useSearch } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
+import { api } from '@/lib/api'
 
 interface StravaStatus {
   connected: boolean
@@ -30,6 +31,20 @@ function SettingsPage() {
   const [status, setStatus] = useState<StravaStatus | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState<string | null>(null)
+
+  async function handleImportEvents() {
+    setImporting(true); setImportMsg(null)
+    try {
+      const r = await api.races.importEvents()
+      setImportMsg(`${r.matched} courses du Nord importées (sur ${r.scanned} événements).`)
+    } catch (e) {
+      setImportMsg(`Erreur : ${(e as Error).message}`)
+    } finally {
+      setImporting(false)
+    }
+  }
 
   async function loadStatus() {
     const res = await fetch('/api/strava/status')
@@ -116,6 +131,19 @@ function SettingsPage() {
             Connecter Strava
           </a>
         )}
+      </div>
+
+      <div className="card" style={{ padding: '1.25rem 1.5rem', marginTop: '1.25rem' }}>
+        <h3 style={{ marginTop: 0, marginBottom: '0.25rem' }}>Catalogue de courses</h3>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: 0 }}>
+          Importe les trails &amp; courses à pied à venir dans le Nord / Hauts-de-France (source : 1000pattes).
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem' }}>
+          <button className="btn btn-primary btn-sm" onClick={handleImportEvents} disabled={importing}>
+            {importing ? 'Import…' : 'Importer les courses du Nord'}
+          </button>
+          {importMsg && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{importMsg}</span>}
+        </div>
       </div>
     </div>
   )

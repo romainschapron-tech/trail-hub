@@ -193,17 +193,18 @@ async function upsertActivities(env: Env, activities: StravaSummaryActivity[]): 
 
 // Fetch every activity newer than the most recent one in the DB and upsert them.
 // Returns the number of new/updated activities.
-export async function syncStravaActivities(env: Env): Promise<number> {
+export async function syncStravaActivities(env: Env, full = false): Promise<number> {
   const token = await getAccessToken(env)
 
-  // Resume from the latest activity we already have.
-  const latest = await env.DB.prepare(
-    'SELECT MAX(start_date) as d FROM strava_activities'
-  ).first<{ d: string | null }>()
+  // Incremental: resume from the latest activity. Full: re-fetch everything (backfills HR).
   let after = 0
-  if (latest?.d) {
-    // start_date stored as local wall time; treat as UTC epoch for the `after` cursor.
-    after = Math.floor(new Date(latest.d + 'Z').getTime() / 1000)
+  if (!full) {
+    const latest = await env.DB.prepare(
+      'SELECT MAX(start_date) as d FROM strava_activities'
+    ).first<{ d: string | null }>()
+    if (latest?.d) {
+      after = Math.floor(new Date(latest.d + 'Z').getTime() / 1000)
+    }
   }
 
   let page = 1

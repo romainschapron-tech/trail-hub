@@ -50,6 +50,44 @@ nutritionRoutes.delete('/products/:id', async (c) => {
   return c.json({ ok: true })
 })
 
+// Best-effort photo enrichment via Open Food Facts (free, partial coverage).
+nutritionRoutes.post('/photos', async (c) => {
+  const db = c.env.DB
+  const rows = await db
+    .prepare(
+      `SELECT id, name, brand FROM nutrition_products
+       WHERE (image_url IS NULL OR image_url = '') AND COALESCE(photo_tried,0) = 0
+       LIMIT 12`
+    )
+    .all<{ id: number; name: string; brand: string | null }>()
+  const before = await db
+    .prepare(`SELECT COUNT(*) AS c FROM nutrition_products WHERE (image_url IS NULL OR image_url='') AND COALESCE(photo_tried,0)=0`)
+    .first<{ c: number }>()
+
+  let updated = 0
+  for (const r of rows.results) {
+    let img: string | null = null
+    try {
+      const q = encodeURIComponent(`${r.brand || ''} ${r.name}`.trim().slice(0, 80))
+      const res = await fetch(
+        `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${q}&json=1&page_size=1&fields=image_front_url`,
+        { headers: { 'User-Agent': 'TrailHub/1.0 (nutrition library)' } }
+      )
+      if (res.ok && (res.headers.get('content-type') || '').includes('json')) {
+        const data = (await res.json()) as { products?: { image_front_url?: string }[] }
+        img = data.products?.[0]?.image_front_url || null
+      }
+    } catch { /* ignore */ }
+    await db
+      .prepare('UPDATE nutrition_products SET image_url = COALESCE(?, image_url), photo_tried = 1 WHERE id = ?')
+      .bind(img, r.id)
+      .run()
+    if (img) updated++
+    await new Promise((res) => setTimeout(res, 500))
+  }
+  return c.json({ updated, processed: rows.results.length, remaining: Math.max(0, (before?.c ?? 0) - rows.results.length) })
+})
+
 // Import the whole library from a public Google Sheet (CSV export).
 nutritionRoutes.post('/import', async (c) => {
   const body = await c.req.json().catch(() => ({}))

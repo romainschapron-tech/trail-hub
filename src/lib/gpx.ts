@@ -56,6 +56,17 @@ function movingAverage(vals: number[], win: number): number[] {
   return out
 }
 
+// Reduce the node count for compact storage (keeps first/last + evenly sampled).
+export function downsampleRoute(route: GpxRoute, maxNodes = 600): GpxRoute {
+  const n = route.nodes.length
+  if (n <= maxNodes) return route
+  const step = (n - 1) / (maxNodes - 1)
+  const nodes: GpxNode[] = []
+  for (let i = 0; i < maxNodes; i++) nodes.push(route.nodes[Math.round(i * step)])
+  nodes[nodes.length - 1] = route.nodes[n - 1]
+  return { ...route, nodes }
+}
+
 export function parseGpx(xml: string): GpxRoute {
   const doc = new DOMParser().parseFromString(xml, 'application/xml')
   if (doc.querySelector('parsererror')) throw new Error('Fichier GPX invalide')
