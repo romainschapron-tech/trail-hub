@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Code:wght@400;500;600;700&display=swap');
+
 *,
 *::before,
 *::after {
@@ -7,31 +9,65 @@
 }
 
 :root {
-  --bg: #0c121f;
-  --bg-card: #161e2e;
-  --bg-elevated: #1d2738;
-  --bg-input: #1f293b;
-  --border: rgba(148, 163, 184, 0.12);
-  --border-strong: rgba(148, 163, 184, 0.22);
+  /* Surface elevation scale — flat, layered slate */
+  --bg: #0a0e17;
+  --bg-card: #131a28;
+  --bg-elevated: #1a2333;
+  --bg-input: #1c2536;
+  --bg-subtle: rgba(255, 255, 255, 0.025);
+
+  --border: rgba(148, 163, 184, 0.10);
+  --border-strong: rgba(148, 163, 184, 0.20);
+
   --text: #f1f5f9;
   --text-muted: #8a98ad;
-  --primary: #3b82f6;
+  --text-faint: #5b6678;
+
+  /* Semantic data colors */
+  --primary: #3b82f6;        /* forme / fitness / volume */
   --primary-hover: #2563eb;
+  --primary-soft: rgba(59, 130, 246, 0.14);
+  --effort: #f97316;         /* effort / dénivelé / intensité */
+  --effort-soft: rgba(249, 115, 22, 0.14);
   --success: #22c55e;
   --warning: #f59e0b;
   --danger: #ef4444;
   --accent: #a855f7;
+
   --radius: 10px;
   --radius-lg: 14px;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-hover: 0 6px 20px -6px rgba(0, 0, 0, 0.45);
   --sidebar-w: 240px;
+
+  --font-sans: 'Fira Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: 'Fira Code', ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font-sans);
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* All figures align in columns: tabular monospaced numerals */
+.num,
+.stat-value,
+td.num,
+th.num {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 a {
@@ -131,6 +167,7 @@ a {
   border-radius: var(--radius-lg);
   padding: 1.25rem;
   box-shadow: var(--shadow-card);
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .stats-grid {
@@ -141,29 +178,52 @@ a {
 }
 
 .stat-card {
+  position: relative;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 1.25rem 1.35rem;
+  padding: 1.3rem 1.4rem;
   box-shadow: var(--shadow-card);
-  transition: border-color 0.15s;
+  overflow: hidden;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
+
+/* Accent rail — defaults to primary (data); add .accent-effort for orange */
+.stat-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--stat-accent, var(--primary));
+  opacity: 0.9;
+}
+
+.stat-card.accent-effort::before { background: var(--effort); }
+.stat-card.accent-success::before { background: var(--success); }
+.stat-card.accent-warning::before { background: var(--warning); }
+.stat-card.accent-muted::before { background: var(--text-faint); }
 
 .stat-card:hover {
   border-color: var(--border-strong);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
 }
 
 .stat-value {
-  font-size: 2rem;
+  font-size: 1.95rem;
   font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
 }
 
 .stat-label {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-top: 0.25rem;
+  letter-spacing: 0.06em;
+  margin-top: 0.4rem;
 }
 
 /* Table */

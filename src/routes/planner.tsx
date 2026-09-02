@@ -43,8 +43,8 @@ function ElevationProfile({ route }: { route: GpxRoute }) {
   })
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block' }}>
-      <polygon points={`${pad},${H - pad} ${pts.join(' ')} ${W - pad},${H - pad}`} fill="rgba(59,130,246,0.18)" />
-      <polyline points={pts.join(' ')} fill="none" stroke="#3b82f6" strokeWidth="1.5" />
+      <polygon points={`${pad},${H - pad} ${pts.join(' ')} ${W - pad},${H - pad}`} fill="rgba(249,115,22,0.16)" />
+      <polyline points={pts.join(' ')} fill="none" stroke="#f97316" strokeWidth="1.5" />
     </svg>
   )
 }
@@ -62,7 +62,7 @@ function NutritionTile({ value, unit, label, sub, color }: { value: string; unit
   return (
     <div className="card" style={{ flex: 1, minWidth: 150, padding: '0.9rem 1.1rem' }}>
       <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
-      <div style={{ fontSize: '1.5rem', fontWeight: 800, marginTop: '0.25rem', color: color ?? 'var(--text)' }}>
+      <div className="num" style={{ fontSize: '1.5rem', fontWeight: 700, marginTop: '0.25rem', color: color ?? 'var(--text)' }}>
         {value}{unit && <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginLeft: 3 }}>{unit}</span>}
       </div>
       {sub && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{sub}</div>}
@@ -126,7 +126,7 @@ function NutritionPlan({ durationSec }: { durationSec: number }) {
         <NutritionTile label="Glucides / heure" value={String(rate)} unit="g" color="var(--primary)" sub={`sur ~${hours.toFixed(1)} h`} />
         <NutritionTile label="Glucides total" value={totalTarget.toLocaleString('fr-FR')} unit="g" />
         <NutritionTile label="Hydratation" value={`${fluidPerH}`} unit="ml/h" sub={`~${(fluidPerH * hours / 1000).toFixed(1)} L total`} />
-        <NutritionTile label="Sodium" value={`${sodiumPerH}`} unit="mg/h" color="#f59e0b" />
+        <NutritionTile label="Sodium" value={`${sodiumPerH}`} unit="mg/h" color="var(--effort)" />
       </div>
 
       <div className="card" style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -155,7 +155,7 @@ function NutritionPlan({ durationSec }: { durationSec: number }) {
         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <button className="btn btn-ghost btn-sm" onClick={() => setInv((a) => [...a, { name: 'Nouvel item', carbs: 25, qty: 1 }])}>+ Item manuel</button>
           <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
-            <input className="form-input" style={{ width: '100%' }} placeholder="🔍 Ajouter depuis ma bibliothèque…" value={pick} onChange={(e) => setPick(e.target.value)} />
+            <input className="form-input" style={{ width: '100%' }} placeholder="Ajouter depuis ma bibliothèque…" value={pick} onChange={(e) => setPick(e.target.value)} />
             {matches.length > 0 && (
               <div className="card" style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, zIndex: 10, padding: '0.35rem', display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {matches.map((p) => (
@@ -172,11 +172,11 @@ function NutritionPlan({ durationSec }: { durationSec: number }) {
 
         <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', borderRadius: 'var(--radius)', background: 'var(--bg)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.4rem' }}>
-            <span>Couverture du besoin : <strong style={{ color: coverage >= 100 ? '#22c55e' : coverage >= 75 ? 'var(--warning)' : 'var(--danger)' }}>{coverage}%</strong></span>
-            <span style={{ color: 'var(--text-muted)' }}>{avail} g dispo / {totalTarget} g visés</span>
+            <span>Couverture du besoin : <strong className="num" style={{ color: coverage >= 100 ? 'var(--success)' : coverage >= 75 ? 'var(--warning)' : 'var(--danger)' }}>{coverage}%</strong></span>
+            <span className="num" style={{ color: 'var(--text-muted)' }}>{avail} g dispo / {totalTarget} g visés</span>
           </div>
           <div style={{ height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
-            <div style={{ width: `${Math.min(100, coverage)}%`, height: '100%', background: coverage >= 100 ? '#22c55e' : coverage >= 75 ? 'var(--warning)' : 'var(--danger)', borderRadius: 4 }} />
+            <div style={{ width: `${Math.min(100, coverage)}%`, height: '100%', background: coverage >= 100 ? 'var(--success)' : coverage >= 75 ? 'var(--warning)' : 'var(--danger)', borderRadius: 4 }} />
           </div>
           {coverage < 100 && <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>Il te manque ~{Math.max(0, totalTarget - avail)} g de glucides pour tenir le rythme.</div>}
         </div>
@@ -307,10 +307,10 @@ function PlannerPage() {
               </label>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', marginBottom: '1rem' }}>
-              <div><div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--primary)' }}>{(route.totalDist / 1000).toFixed(1)} km</div><div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>DISTANCE</div></div>
-              <div><div style={{ fontSize: '1.4rem', fontWeight: 800 }}>{route.totalGain.toLocaleString('fr-FR')} m</div><div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>DÉNIVELÉ +</div></div>
-              <div><div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f59e0b' }}>{Math.round((route.totalGain / (route.totalDist / 1000)))} m/km</div><div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>RATIO D+</div></div>
-              {estimate && <div><div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#22c55e' }}>{fmtClock(estimate)}</div><div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>ESTIMATION</div></div>}
+              <div><div className="num" style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--primary)' }}>{(route.totalDist / 1000).toFixed(1)} km</div><div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>DISTANCE</div></div>
+              <div><div className="num" style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--effort)' }}>{route.totalGain.toLocaleString('fr-FR')} m</div><div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>DÉNIVELÉ +</div></div>
+              <div><div className="num" style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--effort)' }}>{Math.round((route.totalGain / (route.totalDist / 1000)))} m/km</div><div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>RATIO D+</div></div>
+              {estimate && <div><div className="num" style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--success)' }}>{fmtClock(estimate)}</div><div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>ESTIMATION</div></div>}
             </div>
             <ElevationProfile route={route} />
           </div>
@@ -360,11 +360,11 @@ function PlannerPage() {
                 {splits.map((s, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '0.6rem 1rem', fontWeight: 500 }}>{s.label}</td>
-                    <td style={{ padding: '0.6rem 0.5rem', color: 'var(--text-muted)' }}>{(s.dist / 1000).toFixed(1)}</td>
-                    <td style={{ padding: '0.6rem 0.5rem', color: 'var(--text-muted)' }}>{s.gain.toLocaleString('fr-FR')} m</td>
-                    <td style={{ padding: '0.6rem 0.5rem', color: 'var(--text-muted)' }}>{fmtPace(s.segPaceSec)}</td>
-                    <td style={{ padding: '0.6rem 0.5rem', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtHMS(s.cumSec)}</td>
-                    {startSec !== undefined && <td style={{ padding: '0.6rem 1rem', fontVariantNumeric: 'tabular-nums' }}>{clockAt(s.cumSec)}</td>}
+                    <td className="num" style={{ padding: '0.6rem 0.5rem', color: 'var(--text-muted)' }}>{(s.dist / 1000).toFixed(1)}</td>
+                    <td className="num" style={{ padding: '0.6rem 0.5rem', color: 'var(--effort)' }}>{s.gain.toLocaleString('fr-FR')} m</td>
+                    <td className="num" style={{ padding: '0.6rem 0.5rem', color: 'var(--text-muted)' }}>{fmtPace(s.segPaceSec)}</td>
+                    <td className="num" style={{ padding: '0.6rem 0.5rem', fontWeight: 600 }}>{fmtHMS(s.cumSec)}</td>
+                    {startSec !== undefined && <td className="num" style={{ padding: '0.6rem 1rem', color: 'var(--primary)' }}>{clockAt(s.cumSec)}</td>}
                   </tr>
                 ))}
               </tbody>

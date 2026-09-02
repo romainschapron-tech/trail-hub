@@ -17,7 +17,7 @@ function StatCard({
   color?: string
 }) {
   return (
-    <div className="stat-card">
+    <div className="stat-card" style={color ? ({ '--stat-accent': color } as React.CSSProperties) : undefined}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div className="stat-value">{value}</div>
         <span

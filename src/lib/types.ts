@@ -163,6 +163,11 @@ export interface StravaHr {
   trend: { month: string; avg_hr: number }[]
 }
 
+export interface StravaForm {
+  current: { ctl: number; atl: number; tsb: number } | null
+  series: { date: string; ctl: number; atl: number; tsb: number }[]
+}
+
 export interface StravaPaceZones {
   total: number
   zones: { label: string; name: string; fast: number; slow: number; count: number; avgHr: number | null }[]
@@ -181,6 +186,14 @@ export interface StravaYearly {
   km: number
   elevation: number
   hours: number
+}
+
+export interface StravaRecords {
+  longest: { name: string; date: string; km: number; elevation: number } | null
+  climb: { name: string; date: string; elevation: number; km: number } | null
+  longestTime: { name: string; date: string; timeSec: number; km: number } | null
+  effort: { name: string; date: string; value: number; km: number } | null
+  paceRecords: { key: string; distM: number; timeSec: number | null; paceSec: number | null; name: string | null; date: string | null; actualKm: number | null }[]
 }
 
 export interface StravaElevation {

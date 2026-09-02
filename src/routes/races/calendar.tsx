@@ -76,7 +76,7 @@ function CalendarView() {
             }}>
               {day && (
                 <>
-                  <div style={{ fontSize: '0.75rem', fontWeight: isToday(day) ? 700 : 500, color: isToday(day) ? 'var(--primary)' : 'var(--text-muted)', marginBottom: 4 }}>{day}</div>
+                  <div className="num" style={{ fontSize: '0.75rem', fontWeight: isToday(day) ? 700 : 500, color: isToday(day) ? 'var(--primary)' : 'var(--text-muted)', marginBottom: 4 }}>{day}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     {dayRaces.slice(0, 3).map((r) => (
                       <Link key={r.id} to="/races/$raceId" params={{ raceId: String(r.id) }}

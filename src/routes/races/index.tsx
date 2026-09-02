@@ -223,8 +223,8 @@ function RaceListPage() {
                         {race.city ? `${race.city}, ` : ''}
                         {race.country}
                       </td>
-                      <td>{formatDistance(race.distance_km)}</td>
-                      <td>{formatElevation(race.elevation_gain)}</td>
+                      <td className="num">{formatDistance(race.distance_km)}</td>
+                      <td className="num" style={{ color: race.elevation_gain ? 'var(--effort)' : 'var(--text-muted)' }}>{formatElevation(race.elevation_gain)}</td>
                       <td>
                         <RegistrationCell race={race} />
                       </td>

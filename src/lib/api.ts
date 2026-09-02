@@ -1,4 +1,4 @@
-import type { Race, RaceWithTracking, RaceFilters, DashboardStats, YearlyStats, StravaWeekly, StravaMonthly, StravaSport, StravaLoad, StravaElevation, StravaOverview, StravaHr, StravaFitness, StravaPaceZones, StravaYearly, NutritionProduct } from './types'
+import type { Race, RaceWithTracking, RaceFilters, DashboardStats, YearlyStats, StravaWeekly, StravaMonthly, StravaSport, StravaLoad, StravaElevation, StravaOverview, StravaHr, StravaFitness, StravaPaceZones, StravaForm, StravaYearly, StravaRecords, NutritionProduct } from './types'
 
 const BASE = '/api'
 
@@ -123,8 +123,19 @@ export const api = {
     stravaPaceZones() {
       return fetchJson<StravaPaceZones>(`${BASE}/stats/strava/pacezones`)
     },
+    stravaForm() {
+      return fetchJson<StravaForm>(`${BASE}/stats/strava/form`)
+    },
+    predict(dist: number, ele: number) {
+      return fetchJson<{ predicted: number | null; low: number | null; high: number | null; sample: number }>(
+        `${BASE}/stats/predict?dist=${dist}&ele=${ele}`
+      )
+    },
     stravaYearlyTraining() {
       return fetchJson<StravaYearly[]>(`${BASE}/stats/strava/yearly`)
+    },
+    stravaRecords() {
+      return fetchJson<StravaRecords>(`${BASE}/stats/strava/records`)
     },
   },
   nutrition: {
@@ -146,6 +157,12 @@ export const api = {
       return fetchJson<{ ok: boolean; product?: NutritionProduct; error?: string }>(`${BASE}/nutrition/products`, {
         method: 'POST',
         body: JSON.stringify({ url }),
+      })
+    },
+    setPhoto(id: number, imageUrl: string) {
+      return fetchJson<{ ok: boolean; image_url: string | null; error?: string }>(`${BASE}/nutrition/products/${id}/photo`, {
+        method: 'PATCH',
+        body: JSON.stringify({ image_url: imageUrl }),
       })
     },
     remove(id: number) {

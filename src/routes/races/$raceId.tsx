@@ -50,10 +50,11 @@ function ProfileChart({ route, splits }: { route: GpxRoute; splits: { label: str
   )
 }
 
-function GpxSection({ raceId }: { raceId: number }) {
+function GpxSection({ raceId, raceDist, raceEle }: { raceId: number; raceDist: number | null; raceEle: number | null }) {
   const [route, setRoute] = useState<GpxRoute | null>(null)
   const [fileName, setFileName] = useState('')
   const [flatPace, setFlatPace] = useState(360)
+  const [pred, setPred] = useState<{ predicted: number | null; low: number | null; high: number | null; sample: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -61,6 +62,13 @@ function GpxSection({ raceId }: { raceId: number }) {
     api.races.getGpx(raceId).then((d) => { if (d) { setRoute(d.profile); setFileName(d.fileName || '') } })
     api.stats.stravaPace().then((p) => setFlatPace(p.flatPaceSec)).catch(() => {})
   }, [raceId])
+
+  // Calibrated prediction from GPX totals (preferred) or the race's distance/D+.
+  const predDist = route ? route.totalDist / 1000 : raceDist ?? 0
+  const predEle = route ? route.totalGain : raceEle ?? 0
+  useEffect(() => {
+    if (predDist > 0) api.stats.predict(predDist, predEle).then(setPred).catch(() => {})
+  }, [predDist, predEle])
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
@@ -84,11 +92,21 @@ function GpxSection({ raceId }: { raceId: number }) {
         ? [...route.waypoints.map((w) => ({ label: w.name, dist: w.dist })), { label: 'Arrivée', dist: route.totalDist }]
         : [{ label: 'Arrivée', dist: route.totalDist }])
     : []
-  const splits = route ? computeSplits(route, flatPace, checkpoints) : []
-  const estimate = route ? predictTotal(route, flatPace) : 0
+  // Splits scaled to the calibrated prediction (falls back to flat-pace model).
+  const targetSec = pred?.predicted ?? (route ? predictTotal(route, flatPace) : undefined)
+  const splits = route ? computeSplits(route, flatPace, checkpoints, targetSec) : []
 
   return (
     <div className="card" style={{ marginTop: '1.5rem' }}>
+      {pred?.predicted && (
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Objectif estimé</span>
+          <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#22c55e' }}>{fmtClock(pred.predicted)}</span>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            fourchette {fmtClock(pred.low!)} – {fmtClock(pred.high!)} · calibré sur tes {pred.sample} courses
+          </span>
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: route ? '1rem' : 0, flexWrap: 'wrap', gap: '0.5rem' }}>
         <h3 style={{ fontSize: '1rem', margin: 0 }}>Profil & tracé GPX</h3>
         {route ? (
@@ -111,7 +129,6 @@ function GpxSection({ raceId }: { raceId: number }) {
           <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
             <span><strong style={{ color: 'var(--primary)' }}>{(route.totalDist / 1000).toFixed(1)} km</strong></span>
             <span><strong>{route.totalGain.toLocaleString('fr-FR')} m</strong> <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>D+</span></span>
-            <span><strong style={{ color: '#22c55e' }}>{fmtClock(estimate)}</strong> <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>estimé</span></span>
           </div>
           <ProfileChart route={route} splits={splits} />
         </>
@@ -319,7 +336,7 @@ function RaceDetailPage() {
         </div>
       </div>
 
-      <GpxSection raceId={race.id} />
+      <GpxSection raceId={race.id} raceDist={race.distance_km} raceEle={race.elevation_gain} />
     </div>
   )
 }

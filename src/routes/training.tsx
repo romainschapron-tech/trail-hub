@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
-import type { StravaWeekly, StravaMonthly, StravaSport, StravaLoad, StravaElevation, StravaFitness, StravaPaceZones } from '@/lib/types'
+import type { StravaWeekly, StravaMonthly, StravaSport, StravaLoad, StravaElevation, StravaFitness, StravaPaceZones, StravaForm } from '@/lib/types'
 
 export const Route = createFileRoute('/training')({
   component: TrainingPage,
@@ -61,10 +61,10 @@ function SectionTitle({ children, right }: { children: React.ReactNode; right?: 
 
 function Metric({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div className="card" style={{ flex: 1, minWidth: 140, padding: '1rem 1.25rem' }}>
-      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
-      <div style={{ fontSize: '1.6rem', fontWeight: 800, lineHeight: 1.1, marginTop: '0.3rem', color: color ?? 'var(--text)' }}>{value}</div>
-      {sub && <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{sub}</div>}
+    <div className="stat-card" style={{ flex: 1, minWidth: 140, padding: '1.05rem 1.25rem', ...(color ? ({ '--stat-accent': color } as React.CSSProperties) : {}) }}>
+      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+      <div className="num" style={{ fontSize: '1.6rem', fontWeight: 700, lineHeight: 1.1, marginTop: '0.35rem', color: color ?? 'var(--text)' }}>{value}</div>
+      {sub && <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{sub}</div>}
     </div>
   )
 }
@@ -93,6 +93,58 @@ function VerticalBars({ items, height = 150 }: { items: { pct: number; color: st
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
+function tsbZone(t: number): { label: string; color: string; desc: string } {
+  if (t >= 15) return { label: 'Très frais', color: '#3b82f6', desc: 'pic de forme (désentraînement si prolongé)' }
+  if (t >= 5) return { label: 'Frais', color: '#22c55e', desc: 'idéal pour performer le jour J' }
+  if (t >= -10) return { label: 'Neutre', color: '#94a3b8', desc: 'équilibre charge / récup' }
+  if (t >= -30) return { label: 'En charge', color: '#f59e0b', desc: 'phase de progression productive' }
+  return { label: 'Surcharge', color: '#ef4444', desc: 'fatigue élevée — attention au surentraînement' }
+}
+
+// Performance Management Chart: CTL (fitness) area + ATL (fatigue) line + TSB (form) band.
+function PMChart({ series }: { series: StravaForm['series'] }) {
+  const W = 960, H = 250, padL = 38, padR = 14
+  const topY = 14, topH = 136
+  const tsbY = 172, tsbH = 64, zeroY = tsbY + tsbH / 2
+  const n = series.length
+  if (n < 2) return null
+  const maxLoad = Math.max(...series.flatMap((s) => [s.ctl, s.atl]), 1) * 1.1
+  const maxAbs = Math.max(...series.map((s) => Math.abs(s.tsb)), 1)
+  const x = (i: number) => padL + (i / (n - 1)) * (W - padL - padR)
+  const yL = (v: number) => topY + (1 - v / maxLoad) * topH
+  const yT = (v: number) => zeroY - (v / maxAbs) * (tsbH / 2)
+  const ctlPts = series.map((s, i) => `${x(i).toFixed(1)},${yL(s.ctl).toFixed(1)}`).join(' ')
+  const atlPts = series.map((s, i) => `${x(i).toFixed(1)},${yL(s.atl).toFixed(1)}`).join(' ')
+  const step = Math.max(1, Math.ceil(n / 90))
+  const monthTicks = series.map((s, i) => ({ i, s })).filter((_, i) => i % 30 === 0)
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
+      {[0, maxLoad / 2, maxLoad].map((v, i) => (
+        <g key={i}>
+          <line x1={padL} y1={yL(v)} x2={W - padR} y2={yL(v)} stroke="var(--border)" strokeWidth="1" />
+          <text x={padL - 5} y={yL(v) + 3} textAnchor="end" fontSize="9" fill="var(--text-muted)">{Math.round(v)}</text>
+        </g>
+      ))}
+      <polygon points={`${padL},${topY + topH} ${ctlPts} ${W - padR},${topY + topH}`} fill="rgba(59,130,246,0.16)" />
+      <polyline points={ctlPts} fill="none" stroke="#3b82f6" strokeWidth="2" />
+      <polyline points={atlPts} fill="none" stroke="#ec4899" strokeWidth="1.5" />
+      {/* TSB band */}
+      <line x1={padL} y1={zeroY} x2={W - padR} y2={zeroY} stroke="var(--border)" strokeWidth="1" />
+      {series.filter((_, i) => i % step === 0).map((s, k) => {
+        const i = k * step
+        return <rect key={i} x={x(i) - 1.4} y={Math.min(zeroY, yT(s.tsb))} width="2.8" height={Math.abs(yT(s.tsb) - zeroY)} fill={s.tsb >= 0 ? '#22c55e' : '#ef4444'} opacity="0.8" />
+      })}
+      <text x={padL - 5} y={tsbY + 9} textAnchor="end" fontSize="9" fill="var(--text-muted)">Forme</text>
+      {monthTicks.map(({ i, s }) => (
+        <text key={i} x={x(i)} y={H - 4} textAnchor="middle" fontSize="9" fill="var(--text-muted)">
+          {new Date(s.date).toLocaleDateString('fr-FR', { month: 'short' })}
+        </text>
+      ))}
+    </svg>
+  )
+}
+
 function TrainingPage() {
   const [weekly, setWeekly] = useState<StravaWeekly[]>([])
   const [monthly, setMonthly] = useState<StravaMonthly[]>([])
@@ -101,6 +153,7 @@ function TrainingPage() {
   const [elevation, setElevation] = useState<StravaElevation[]>([])
   const [fitness, setFitness] = useState<StravaFitness | null>(null)
   const [pz, setPz] = useState<StravaPaceZones | null>(null)
+  const [form, setForm] = useState<StravaForm | null>(null)
   const [weekRange, setWeekRange] = useState(26)
   const [weekView, setWeekView] = useState<'chart' | 'table'>('table')
   const [loading, setLoading] = useState(true)
@@ -109,6 +162,7 @@ function TrainingPage() {
   useEffect(() => {
     api.stats.stravaFitness().then(setFitness).catch(() => {})
     api.stats.stravaPaceZones().then(setPz).catch(() => {})
+    api.stats.stravaForm().then(setForm).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -176,6 +230,31 @@ function TrainingPage() {
       <div className="page-header" style={{ marginBottom: 0 }}>
         <h1 className="page-title">Entraînement</h1>
       </div>
+
+      {/* ── Forme / Fatigue (PMC) ───────────────────────── */}
+      {form?.current && (
+        <section>
+          <SectionTitle>Forme &amp; fatigue</SectionTitle>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+            <Metric label="Fitness (CTL)" value={String(form.current.ctl)} sub="charge chronique" color="#3b82f6" />
+            <Metric label="Fatigue (ATL)" value={String(form.current.atl)} sub="charge aiguë" color="#ec4899" />
+            <Metric label="Forme (TSB)" value={(form.current.tsb >= 0 ? '+' : '') + form.current.tsb} sub={tsbZone(form.current.tsb).label} color={tsbZone(form.current.tsb).color} />
+            <div className="card" style={{ flex: 2, minWidth: 220, padding: '1rem 1.25rem', display: 'flex', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                <strong style={{ color: tsbZone(form.current.tsb).color }}>{tsbZone(form.current.tsb).label}</strong> — {tsbZone(form.current.tsb).desc}
+              </span>
+            </div>
+          </div>
+          <div className="card" style={{ padding: '1.25rem 1.35rem' }}>
+            <PMChart series={form.series} />
+            <div style={{ display: 'flex', gap: '1.25rem', marginTop: '0.6rem', fontSize: '0.72rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}><span style={{ width: 10, height: 10, borderRadius: 2, background: '#3b82f6' }} /> Fitness (forme de fond)</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}><span style={{ width: 10, height: 10, borderRadius: 2, background: '#ec4899' }} /> Fatigue</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}><span style={{ width: 10, height: 10, borderRadius: 2, background: '#22c55e' }} /> Forme + / <span style={{ width: 10, height: 10, borderRadius: 2, background: '#ef4444', display: 'inline-block' }} /> Forme −</span>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── Forme du moment ─────────────────────────────── */}
       <section>
@@ -265,9 +344,9 @@ function TrainingPage() {
                       <td style={{ padding: '0.5rem 1.25rem' }}>
                         <strong>W{wn}</strong> <span style={{ color: 'var(--text-muted)' }}>· {d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' })}</span>
                       </td>
-                      <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{w.km}</td>
-                      <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{w.elevation.toLocaleString('fr-FR')} m</td>
-                      <td style={{ padding: '0.5rem 1.25rem', textAlign: 'right', color: 'var(--text-muted)' }}>{w.count}</td>
+                      <td className="num" style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: 600 }}>{w.km}</td>
+                      <td className="num" style={{ padding: '0.5rem 0.5rem', textAlign: 'right', color: 'var(--text-muted)' }}>{w.elevation.toLocaleString('fr-FR')} m</td>
+                      <td className="num" style={{ padding: '0.5rem 1.25rem', textAlign: 'right', color: 'var(--text-muted)' }}>{w.count}</td>
                     </tr>
                   )
                 })}
@@ -358,13 +437,13 @@ function TrainingPage() {
                   <td style={{ padding: '0.5rem 0.5rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                       <div style={{ flex: 1, height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
-                        <div style={{ width: `${(e.elevation / maxElev) * 100}%`, height: '100%', background: '#f59e0b', borderRadius: 4 }} />
+                        <div style={{ width: `${(e.elevation / maxElev) * 100}%`, height: '100%', background: 'var(--effort)', borderRadius: 4 }} />
                       </div>
-                      <span style={{ minWidth: 60, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{e.elevation.toLocaleString('fr-FR')} m</span>
+                      <span className="num" style={{ minWidth: 60, textAlign: 'right' }}>{e.elevation.toLocaleString('fr-FR')} m</span>
                     </div>
                   </td>
-                  <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{e.km} km</td>
-                  <td style={{ padding: '0.5rem 1.25rem', textAlign: 'right', fontWeight: 600, color: e.ratio_dplus_per_km >= 30 ? '#f59e0b' : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{e.ratio_dplus_per_km} m/km</td>
+                  <td className="num" style={{ padding: '0.5rem 0.5rem', textAlign: 'right', color: 'var(--text-muted)' }}>{e.km} km</td>
+                  <td className="num" style={{ padding: '0.5rem 1.25rem', textAlign: 'right', fontWeight: 600, color: e.ratio_dplus_per_km >= 30 ? 'var(--effort)' : 'var(--text-muted)' }}>{e.ratio_dplus_per_km} m/km</td>
                 </tr>
               ))}
             </tbody>

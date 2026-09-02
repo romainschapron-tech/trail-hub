@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useMemo } from 'react'
 import { api } from '@/lib/api'
-import type { YearlyStats, RaceWithTracking, StravaYearly } from '@/lib/types'
+import type { YearlyStats, RaceWithTracking, StravaYearly, StravaRecords } from '@/lib/types'
 
 export const Route = createFileRoute('/stats')({
   component: StatsPage,
@@ -93,10 +93,10 @@ function TrainingByYear({ training }: { training: StravaYearly[] }) {
                 <div style={{ flex: 1 }}>
                   <StackedBar segments={seg(y, distGroups, 'km')} max={maxDist} />
                 </div>
-                <span style={{ width: 92, textAlign: 'right', fontSize: '0.8rem', fontVariantNumeric: 'tabular-nums' }}>
+                <span className="num" style={{ width: 92, textAlign: 'right', fontSize: '0.8rem' }}>
                   {Math.round(runKm).toLocaleString('fr-FR')} km <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>à pied</span>
                 </span>
-                <span style={{ width: 78, textAlign: 'right', fontSize: '0.78rem', color: '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>
+                <span className="num" style={{ width: 78, textAlign: 'right', fontSize: '0.78rem', color: 'var(--effort)' }}>
                   {elevTotal.toLocaleString('fr-FR')} m
                 </span>
               </div>
@@ -108,9 +108,59 @@ function TrainingByYear({ training }: { training: StravaYearly[] }) {
   )
 }
 
+function fmtRecDate(d: string | null) {
+  if (!d) return ''
+  return new Date(d).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })
+}
+
+const DIST_LABELS: Record<string, string> = { '5k': '5 km', '10k': '10 km', semi: 'Semi', marathon: 'Marathon' }
+
+function RecordCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
+  return (
+    <div className="stat-card" style={{ flex: 1, minWidth: 150, padding: '1.05rem 1.25rem', ...(accent ? ({ '--stat-accent': accent } as React.CSSProperties) : {}) }}>
+      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+      <div className="num" style={{ fontSize: '1.55rem', fontWeight: 700, lineHeight: 1.1, marginTop: '0.35rem', color: accent ?? 'var(--text)' }}>{value}</div>
+      {sub && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>}
+    </div>
+  )
+}
+
+function RecordsSection({ rec }: { rec: StravaRecords }) {
+  return (
+    <div style={{ marginBottom: '1.5rem' }}>
+      <h2 style={{ fontSize: '1rem', marginBottom: '0.85rem' }}>Records personnels</h2>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.85rem' }}>
+        {rec.longest && <RecordCard label="Plus longue sortie" value={`${rec.longest.km} km`} sub={`${rec.longest.elevation.toLocaleString('fr-FR')} m D+ · ${fmtRecDate(rec.longest.date)}`} accent="var(--primary)" />}
+        {rec.climb && <RecordCard label="Plus gros dénivelé" value={`${rec.climb.elevation.toLocaleString('fr-FR')} m`} sub={`${rec.climb.km} km · ${fmtRecDate(rec.climb.date)}`} accent="var(--effort)" />}
+        {rec.longestTime && <RecordCard label="Plus longue durée" value={formatSeconds(rec.longestTime.timeSec)} sub={`${rec.longestTime.km} km · ${fmtRecDate(rec.longestTime.date)}`} accent="var(--primary)" />}
+        {rec.effort && <RecordCard label="Meilleur effort relatif" value={String(rec.effort.value)} sub={`${rec.effort.km} km · ${fmtRecDate(rec.effort.date)}`} accent="var(--warning)" />}
+      </div>
+      {rec.paceRecords.some((r) => r.timeSec) && (
+        <>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+            Records par distance <span style={{ opacity: 0.8 }}>— estimés d'après l'allure de tes meilleures sorties route proches de chaque distance</span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+            {rec.paceRecords.filter((r) => r.timeSec).map((r) => (
+              <RecordCard
+                key={r.key}
+                label={DIST_LABELS[r.key] ?? r.key}
+                value={formatSeconds(r.timeSec!)}
+                sub={`${r.paceSec ? `${Math.floor(r.paceSec / 60)}:${String(r.paceSec % 60).padStart(2, '0')}/km` : ''} · sur ${r.actualKm} km`}
+                accent="var(--success)"
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function StatsPage() {
   const [yearly, setYearly] = useState<YearlyStats[]>([])
   const [training, setTraining] = useState<StravaYearly[]>([])
+  const [records, setRecords] = useState<StravaRecords | null>(null)
   const [pastRaces, setPastRaces] = useState<RaceWithTracking[]>([])
   const [targetKm, setTargetKm] = useState('')
   const [targetElev, setTargetElev] = useState('')
@@ -118,6 +168,7 @@ function StatsPage() {
   useEffect(() => {
     api.stats.yearly().then(setYearly).catch(console.error)
     api.stats.stravaYearlyTraining().then(setTraining).catch(console.error)
+    api.stats.stravaRecords().then(setRecords).catch(console.error)
     api.races
       .list({ trackingStatus: 'completed', sort: 'race_date', order: 'asc', limit: 200 })
       .then((r) => setPastRaces(r.data))
@@ -214,7 +265,7 @@ function StatsPage() {
                     <Bar value={y.total_km} max={maxKm} />
                   </td>
                   <td style={{ padding: '0.6rem 0.75rem' }}>
-                    <Bar value={y.total_elevation ?? 0} max={maxElev} color="var(--warning, #f59e0b)" />
+                    <Bar value={y.total_elevation ?? 0} max={maxElev} color="var(--effort)" />
                   </td>
                   <td style={{ padding: '0.6rem 0.75rem', fontWeight: y.best_position != null && y.best_position <= 10 ? 600 : 400, color: y.best_position != null && y.best_position <= 3 ? 'var(--success, #22c55e)' : 'inherit' }}>
                     {y.best_position != null ? `${y.best_position}e` : '—'}
@@ -265,15 +316,8 @@ function StatsPage() {
               value={targetKm}
               onChange={(e) => setTargetKm(e.target.value)}
               placeholder="ex: 50"
-              style={{
-                padding: '0.5rem 0.75rem',
-                background: 'var(--bg-secondary, var(--border))',
-                border: '1px solid var(--border)',
-                borderRadius: 6,
-                color: 'var(--text)',
-                fontSize: '0.9375rem',
-                width: 110,
-              }}
+              className="form-input num"
+              style={{ width: 110 }}
             />
           </div>
           <div>
@@ -287,15 +331,8 @@ function StatsPage() {
               value={targetElev}
               onChange={(e) => setTargetElev(e.target.value)}
               placeholder="ex: 2500"
-              style={{
-                padding: '0.5rem 0.75rem',
-                background: 'var(--bg-secondary, var(--border))',
-                border: '1px solid var(--border)',
-                borderRadius: 6,
-                color: 'var(--text)',
-                fontSize: '0.9375rem',
-                width: 140,
-              }}
+              className="form-input num"
+              style={{ width: 140 }}
             />
           </div>
         </div>
@@ -303,8 +340,8 @@ function StatsPage() {
         {prediction && (
           <div>
             <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-              <div style={{ textAlign: 'center', padding: '1rem 1.5rem', background: 'var(--border)', borderRadius: 8 }}>
-                <div style={{ fontSize: '2rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ textAlign: 'center', padding: '1rem 1.5rem', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+                <div className="num" style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--primary)' }}>
                   {formatSeconds(prediction.predicted)}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
@@ -338,7 +375,7 @@ function StatsPage() {
                         <td style={{ padding: '0.4rem 0.5rem', color: 'var(--text)' }}>{r.name}</td>
                         <td style={{ padding: '0.4rem 0.5rem', color: 'var(--text-muted)' }}>{r.distance_km} km</td>
                         <td style={{ padding: '0.4rem 0.5rem', color: 'var(--text-muted)' }}>{r.elevation_gain} m D+</td>
-                        <td style={{ padding: '0.4rem 0.5rem', fontVariantNumeric: 'tabular-nums' }}>{r.finish_time}</td>
+                        <td className="num" style={{ padding: '0.4rem 0.5rem' }}>{r.finish_time}</td>
                       </tr>
                     ))}
                   </tbody>

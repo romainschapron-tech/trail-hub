@@ -116,6 +116,113 @@ statsRoutes.get('/strava/fitness', async (c) => {
   })
 })
 
+// Race-time prediction, calibrated on the athlete's own completed races (power law + climb cost).
+statsRoutes.get('/predict', async (c) => {
+  const db = c.env.DB
+  const dist = parseFloat(c.req.query('dist') || '0')
+  const ele = parseFloat(c.req.query('ele') || '0')
+  const CLIMB = 0.012 // km flat-equivalent per metre of D+
+
+  const races = await db
+    .prepare(
+      `SELECT r.distance_km AS d, COALESCE(r.elevation_gain,0) AS e, t.finish_time AS ft
+       FROM races r JOIN tracking t ON t.race_id = r.id
+       WHERE t.status = 'completed' AND t.finish_time IS NOT NULL AND r.distance_km > 3`
+    )
+    .all<{ d: number; e: number; ft: string }>()
+
+  const hist: { deq: number; pace: number; ratio: number }[] = []
+  const pts: { lx: number; ly: number }[] = []
+  for (const r of races.results) {
+    const p = r.ft.split(':').map(Number)
+    if (p.length !== 3 || p.some(isNaN)) continue
+    const sec = p[0] * 3600 + p[1] * 60 + p[2]
+    const deq = r.d + r.e * CLIMB
+    if (sec > 600 && deq > 1) {
+      hist.push({ deq, pace: sec / deq, ratio: r.e / r.d })
+      pts.push({ lx: Math.log(deq), ly: Math.log(sec / deq) })
+    }
+  }
+
+  // Global power-law fit (fallback when no similar races).
+  let p0 = 150, exp = 1.16
+  if (pts.length >= 4) {
+    const n = pts.length
+    const mx = pts.reduce((a, p) => a + p.lx, 0) / n
+    const my = pts.reduce((a, p) => a + p.ly, 0) / n
+    const k = pts.reduce((a, p) => a + (p.lx - mx) * (p.ly - my), 0) / pts.reduce((a, p) => a + (p.lx - mx) ** 2, 0)
+    p0 = Math.exp(my - k * mx)
+    exp = k + 1
+  }
+
+  let predicted: number | null = null
+  let low: number | null = null
+  let high: number | null = null
+  if (dist > 0) {
+    const deqT = dist + ele * CLIMB
+    const ratioT = ele / dist
+    // Similarity-weighted prediction: races close in BOTH distance and steepness count most.
+    let sw = 0, swp = 0, swp2 = 0
+    for (const h of hist) {
+      const wd = Math.exp(-(((Math.log(h.deq) - Math.log(deqT)) / 0.22) ** 2))
+      const wr = Math.exp(-(((h.ratio - ratioT) / 35) ** 2))
+      const w = wd * wr
+      sw += w; swp += w * h.pace; swp2 += w * h.pace * h.pace
+    }
+    let pace: number
+    if (sw > 0.5) {
+      pace = swp / sw
+      const variance = Math.max(0, swp2 / sw - pace * pace)
+      const sd = Math.sqrt(variance)
+      predicted = Math.round(pace * deqT)
+      const rel = Math.min(0.13, Math.max(0.04, sd / pace)) // 4–13% band by confidence
+      low = Math.round(predicted * (1 - rel))
+      high = Math.round(predicted * (1 + rel))
+    } else {
+      predicted = Math.round(p0 * Math.pow(deqT, exp))
+      low = Math.round(predicted * 0.9)
+      high = Math.round(predicted * 1.12)
+    }
+  }
+  return c.json({ predicted, low, high, sample: hist.length })
+})
+
+// Fitness / Fatigue / Form (CTL / ATL / TSB) — Banister model from daily Relative Effort.
+statsRoutes.get('/strava/form', async (c) => {
+  const db = c.env.DB
+  const rows = await db
+    .prepare(
+      `SELECT date(start_date) AS day, SUM(COALESCE(relative_effort, 0)) AS load
+       FROM strava_activities
+       GROUP BY day HAVING load > 0 ORDER BY day ASC`
+    )
+    .all<{ day: string; load: number }>()
+
+  if (rows.results.length === 0) return c.json({ current: null, series: [] })
+
+  const loadByDay: Record<string, number> = {}
+  for (const r of rows.results) loadByDay[r.day] = r.load
+
+  const start = new Date(rows.results[0].day + 'T00:00:00Z')
+  const today = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z')
+  let ctl = 0, atl = 0
+  const series: { date: string; ctl: number; atl: number; tsb: number }[] = []
+  for (let d = new Date(start); d <= today; d.setUTCDate(d.getUTCDate() + 1)) {
+    const key = d.toISOString().slice(0, 10)
+    const load = loadByDay[key] || 0
+    const tsb = ctl - atl // yesterday's fitness − fatigue
+    ctl += (load - ctl) / 42
+    atl += (load - atl) / 7
+    series.push({ date: key, ctl: Math.round(ctl), atl: Math.round(atl), tsb: Math.round(tsb) })
+  }
+
+  const last = series[series.length - 1]
+  return c.json({
+    current: { ctl: last.ctl, atl: last.atl, tsb: last.tsb },
+    series: series.slice(-180),
+  })
+})
+
 // Pace-zone distribution: sessions classified by flat-equivalent pace into the athlete's pace zones.
 statsRoutes.get('/strava/pacezones', async (c) => {
   const db = c.env.DB
@@ -213,6 +320,72 @@ statsRoutes.get('/strava/pace', async (c) => {
   }
 
   return c.json({ flatPaceSec: flatPace, sampleCount: sample })
+})
+
+// Personal records — exact ones from summary data + estimated distance records.
+statsRoutes.get('/strava/records', async (c) => {
+  const db = c.env.DB
+  const foot = `sport_type IN ('Run','TrailRun','Hike')`
+
+  // Exact records (foot sports) — biggest single-activity values.
+  const longest = await db.prepare(
+    `SELECT name, start_date, distance_m, elevation_gain FROM strava_activities
+     WHERE ${foot} AND distance_m > 0 ORDER BY distance_m DESC LIMIT 1`
+  ).first<{ name: string; start_date: string; distance_m: number; elevation_gain: number }>()
+
+  const climb = await db.prepare(
+    `SELECT name, start_date, elevation_gain, distance_m FROM strava_activities
+     WHERE ${foot} AND elevation_gain > 0 ORDER BY elevation_gain DESC LIMIT 1`
+  ).first<{ name: string; start_date: string; elevation_gain: number; distance_m: number }>()
+
+  const longestTime = await db.prepare(
+    `SELECT name, start_date, moving_time_s, distance_m FROM strava_activities
+     WHERE ${foot} AND moving_time_s > 0 ORDER BY moving_time_s DESC LIMIT 1`
+  ).first<{ name: string; start_date: string; moving_time_s: number; distance_m: number }>()
+
+  const effort = await db.prepare(
+    `SELECT name, start_date, relative_effort, distance_m FROM strava_activities
+     WHERE ${foot} AND relative_effort > 0 ORDER BY relative_effort DESC LIMIT 1`
+  ).first<{ name: string; start_date: string; relative_effort: number; distance_m: number }>()
+
+  // Distance records (estimated): best avg pace sustained over >= D, on flat road runs.
+  const distances = [
+    { key: '5k', m: 5000 },
+    { key: '10k', m: 10000 },
+    { key: 'semi', m: 21097 },
+    { key: 'marathon', m: 42195 },
+  ]
+  const paceRecords = []
+  for (const d of distances) {
+    // Only efforts near this distance (D .. 1.5×D) so a longer race's pace
+    // doesn't masquerade as a shorter-distance PR.
+    const best = await db.prepare(
+      `SELECT name, start_date, distance_m, moving_time_s,
+              (moving_time_s * 1.0 / (distance_m / 1000.0)) AS pace
+       FROM strava_activities
+       WHERE sport_type = 'Run' AND moving_time_s > 0
+         AND distance_m >= ? AND distance_m < ?
+         AND (elevation_gain * 1000.0 / distance_m) < 12
+       ORDER BY pace ASC LIMIT 1`
+    ).bind(d.m, Math.round(d.m * 1.5)).first<{ name: string; start_date: string; distance_m: number; moving_time_s: number; pace: number }>()
+    paceRecords.push({
+      key: d.key,
+      distM: d.m,
+      timeSec: best ? Math.round(best.pace * (d.m / 1000)) : null,
+      paceSec: best ? Math.round(best.pace) : null,
+      name: best?.name ?? null,
+      date: best?.start_date ?? null,
+      actualKm: best ? Math.round(best.distance_m / 100) / 10 : null,
+    })
+  }
+
+  return c.json({
+    longest: longest ? { name: longest.name, date: longest.start_date, km: Math.round(longest.distance_m / 100) / 10, elevation: longest.elevation_gain } : null,
+    climb: climb ? { name: climb.name, date: climb.start_date, elevation: climb.elevation_gain, km: Math.round(climb.distance_m / 100) / 10 } : null,
+    longestTime: longestTime ? { name: longestTime.name, date: longestTime.start_date, timeSec: longestTime.moving_time_s, km: Math.round(longestTime.distance_m / 100) / 10 } : null,
+    effort: effort ? { name: effort.name, date: effort.start_date, value: effort.relative_effort, km: Math.round(effort.distance_m / 100) / 10 } : null,
+    paceRecords,
+  })
 })
 
 // Weekly km + elevation for the last N weeks

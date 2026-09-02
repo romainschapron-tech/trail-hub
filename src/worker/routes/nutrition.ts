@@ -45,6 +45,17 @@ nutritionRoutes.get('/products', async (c) => {
   return c.json(rows.results)
 })
 
+// Set/clear a product photo manually (paste an image URL).
+nutritionRoutes.patch('/products/:id/photo', async (c) => {
+  const { image_url } = (await c.req.json().catch(() => ({}))) as { image_url?: string }
+  const url = (image_url || '').trim()
+  if (url && !/^https?:\/\//i.test(url)) return c.json({ ok: false, error: 'URL invalide (doit commencer par http)' }, 400)
+  await c.env.DB.prepare('UPDATE nutrition_products SET image_url = ?, photo_tried = 1 WHERE id = ?')
+    .bind(url || null, c.req.param('id'))
+    .run()
+  return c.json({ ok: true, image_url: url || null })
+})
+
 nutritionRoutes.delete('/products/:id', async (c) => {
   await c.env.DB.prepare('DELETE FROM nutrition_products WHERE id = ?').bind(c.req.param('id')).run()
   return c.json({ ok: true })
